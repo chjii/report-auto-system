@@ -183,29 +183,39 @@ contents = st.text_area(
 )
 
 # ==========================================
-# 5. 스마트 사진 업로드 (바둑판 2x2 UI)
+# 5. 스마트 사진 업로드 (미리보기 완벽 구현!)
 # ==========================================
 st.divider()
 st.markdown("### 📷 현장 사진 업로드 (사진 대장용)")
 st.caption("실제 엑셀 양식과 동일하게 2칸씩 나란히 배치됩니다. 1칸당 최대 2장의 사진을 넣을 수 있습니다.")
 
-# 기본 4칸 세팅
 if "photo_blocks" not in st.session_state:
     st.session_state.photo_blocks = 4
 
 photo_data = []
 
-# 2칸씩 묶어서 출력 (2x2 바둑판 형태)
 for i in range(0, st.session_state.photo_blocks, 2):
     cols = st.columns(2)
     for j in range(2):
         block_idx = i + j
         if block_idx < st.session_state.photo_blocks:
             with cols[j]:
-                # 시각적인 구분을 위해 박스 느낌 주기
                 with st.container(border=True):
                     st.markdown(f"**[{block_idx+1}번 칸]**")
-                    photos = st.file_uploader(f"➕ 사진 추가 (최대 2장)", type=['png', 'jpg', 'jpeg'], accept_multiple_files=True, key=f"photo_{block_idx}")
+                    photos = st.file_uploader(f"➕ 사진 추가 (최대 2장)", type=['png', 'jpg', 'jpeg'], accept_multiple_files=True, key=f"photo_{block_idx}", label_visibility="collapsed")
+                    
+                    # 💡 [미리보기 표시 기능] 사진이 업로드되면 즉시 보여줍니다.
+                    if photos:
+                        p_cols = st.columns(2)
+                        for p_idx, p_file in enumerate(photos[:2]):
+                            with p_cols[p_idx]:
+                                try:
+                                    img_preview = PILImage.open(p_file)
+                                    st.image(img_preview, use_column_width=True)
+                                    p_file.seek(0) # 화면에 보여준 뒤 엑셀 작업을 위해 파일 포인터 되돌리기
+                                except:
+                                    st.caption("미리보기 불가")
+                    
                     desc = st.text_area("설명", key=f"desc_{block_idx}", height=68, placeholder="이 칸의 설명을 입력하세요.", label_visibility="collapsed")
                     photo_data.append((block_idx, photos, desc))
 
@@ -330,7 +340,7 @@ if st.button(f"🚀 {vendor} {task_type}보고서 생성하기", use_container_w
                 # --------------------------------------------------
                 output_photo = None
                 
-                photo_data.sort(key=lambda x: x[0]) # 순서대로 정렬
+                photo_data.sort(key=lambda x: x[0]) 
                 has_photo_data = any(len(photos) > 0 or desc.strip() for _, photos, desc in photo_data)
                 
                 if has_photo_data:
@@ -359,6 +369,8 @@ if st.button(f"🚀 {vendor} {task_type}보고서 생성하기", use_container_w
                             
                         for j, photo_file in enumerate(photos):
                             if j >= 2: break 
+                            
+                            photo_file.seek(0) 
                             col = 'B' if j == 0 else 'D'
                             
                             img_pil = PILImage.open(photo_file)
