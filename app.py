@@ -1,6 +1,6 @@
 import streamlit as st
 import openpyxl
-from openpyxl.styles import Font
+from openpyxl.styles import Font, Alignment
 from openpyxl.drawing.image import Image
 from PIL import Image as PILImage
 import io
@@ -34,7 +34,6 @@ with col_v:
 with col_s:
     site_select = st.selectbox("현장명 중분류", site_dict[vendor])
 
-# [수정] 현장명 직접 입력칸이 선택 즉시 바로 아래에 나타납니다.
 if site_select == "직접 입력...":
     site_name = st.text_input("새로운 현장명을 직접 입력해주세요 (필수)")
 else:
@@ -53,7 +52,6 @@ with col1:
 with col2:
     manager_select = st.selectbox("담당자 선택", ["김주영 책임", "최진명 차장", "조상길 부장", "직접 입력..."])
 
-# [수정] 담당자 직접 입력칸 추가! 
 if manager_select == "직접 입력...":
     manager = st.text_input("담당자명을 직접 입력해주세요 (필수)")
 else:
@@ -70,14 +68,52 @@ if len(date_range) == 2:
 
 workers = st.text_input("작업자명 및 인원", placeholder="예: 최진명 차장 외 6명")
 
-# ==========================================
-# 3. 작업 내용 메모장
-# ==========================================
-st.markdown(f"**{task_type} 내용 (조치 완료 우선 ➔ 교체 필요 항목 후순위)**")
-contents = st.text_area("숫자 번호는 안 적으셔도 됩니다. 기본 항목(1번) 다음인 2번부터 자동 시작됩니다.", height=150)
+st.divider()
 
 # ==========================================
-# 4. 스마트 사진 업로드 및 개별 설명 입력창
+# [신규] 3. 설비 선택 및 기본 점검 항목 세팅
+# ==========================================
+st.markdown("### ⚙️ 점검 진행 설비 선택")
+equipments = st.multiselect(
+    "현장에서 점검한 설비를 모두 선택하세요 (선택 시 기본 항목 자동 출력)", 
+    ["STACKER CRANE", "CONVEYOR", "RGV"], 
+    default=["STACKER CRANE"]
+)
+
+# 💡 각 설비별 기본 점검 공통사항 (검은 글씨 디폴트값)
+DEFAULT_TEXTS = {
+    "STACKER CRANE": [
+        "1. S/C 점검 공통사항",
+        "  1) 승강부,주행부,FORK부 구동 MOTOR 및 감속기 발열 상태 및 OIL 누유 상태 점검",
+        "  2) CARRIAGE INNER ROLLER, GUIDE ROLLER 구름 상태 및 마모 상태 점검",
+        "  3) FORK CHAIN TENSION 점검 및 C/F BEARING, MC GUIDE GREASE 도포",
+        "  4) STC(기상반) 단자대 풀림 상태 CHECK 및 재조임",
+        "  5) 주행부 구동 WHEEL,종동 WHEEL, GUIDE ROLLER 구름 상태 및 마모 상태 점검"
+    ],
+    "CONVEYOR": [
+        "1. C/V 점검 공통사항",
+        "  1) 구동 MOTOR 및 감속기 발열/소음 상태 및 OIL 누유 상태 점검",
+        "  2) 체인/벨트 장력 상태 및 마모 상태 점검",
+        "  3) 구동/종동 ROLLER 구름 상태 점검 및 베어링 소음 확인",
+        "  4) 센서(광전, 근접 등) 취부 상태 및 동작 상태 점검"
+    ],
+    "RGV": [
+        "1. RGV 점검 공통사항",
+        "  1) 주행부 구동 MOTOR 발열 및 소음, 누유 상태 점검",
+        "  2) 주행 WHEEL 및 GUIDE ROLLER 마모 상태 점검",
+        "  3) 집전기(Collector) 마모 상태 및 단자대 조임 상태 점검",
+        "  4) 충돌 방지 센서 및 통신 장치 상태 점검"
+    ]
+}
+
+# ==========================================
+# 4. 작업 내용 메모장
+# ==========================================
+st.markdown(f"**{task_type} 내용 (설비별 자동 분류 및 2번부터 자동 넘버링)**")
+contents = st.text_area("S/C, CV, RGV 등 키워드를 포함해서 적어주시면 코드가 알아서 각 설비 구역으로 나눠서 정리합니다.", height=150)
+
+# ==========================================
+# 5. 스마트 사진 업로드 및 개별 설명 입력창
 # ==========================================
 st.divider()
 st.markdown("### 📷 현장 사진 업로드 (선택사항)")
@@ -98,13 +134,14 @@ def sort_rules(text):
     return (is_need_replace, ho_number)
 
 # ==========================================
-# 5. 엑셀 생성 실행
+# 6. 엑셀 생성 실행
 # ==========================================
 st.divider()
 if st.button(f"🚀 {vendor} {task_type}보고서 생성하기", use_container_width=True):
-    # 빈칸 검사 로직에 manager(담당자)도 추가
-    if not site_name or not contents or not date_str or not author or not manager:
-        st.warning("작성자, 담당자, 현장명, 날짜, 내용은 필수입니다!")
+    if not site_name or not date_str or not author or not manager:
+        st.warning("작성자, 담당자, 현장명, 날짜는 필수입니다!")
+    elif not equipments:
+        st.warning("점검 진행 설비를 최소 1개 이상 선택해주세요!")
     else:
         with st.spinner("엑셀 파일을 만들고 있습니다..."):
             try:
@@ -125,29 +162,63 @@ if st.button(f"🚀 {vendor} {task_type}보고서 생성하기", use_container_w
                 ws_report['H6'] = author    
                 ws_report['C8'] = manager   
                 
-                # 1. 기존 잔여 데이터 지우기 (18줄 ~ 38줄)
-                for r in range(18, 39):
+                # 1. 기존 잔여 데이터 지우기 (12줄 ~ 60줄 넉넉하게 초기화)
+                for r in range(12, 60):
                     ws_report.cell(row=r, column=2).value = None
                     ws_report.cell(row=r, column=2).font = Font(name='맑은 고딕', size=11, color="000000")
+                    ws_report.cell(row=r, column=2).alignment = Alignment(horizontal='left', vertical='center')
                 
-                # 2. 사용자 입력 내용 정렬 및 기입
+                # 2. 사용자 입력 내용 정렬 및 설비별 분류
                 raw_lines = [line.strip() for line in contents.split('\n') if line.strip()]
                 sorted_lines = sorted(raw_lines, key=sort_rules)
                 
-                start_row = 18
-                for idx, text in enumerate(sorted_lines):
-                    if start_row + idx > 38: break 
+                sc_lines, cv_lines, rgv_lines, other_lines = [], [], [], []
+                for line in sorted_lines:
+                    u_line = line.upper()
+                    if "RGV" in u_line: rgv_lines.append(line)
+                    elif "CV" in u_line or "CONVEYOR" in u_line or "컨베이어" in u_line: cv_lines.append(line)
+                    elif "S/C" in u_line or "STC" in u_line or "크레인" in u_line or "호기" in u_line: sc_lines.append(line)
+                    else: sc_lines.append(line) # 키워드가 없으면 기본적으로 S/C에 배정
+
+                # 3. 설비별 엑셀 기입 로직 (기본 텍스트 + 사용자 입력)
+                current_row = 12
+                
+                def write_equipment_block(eq_name, eq_title, defaults, user_lines):
+                    nonlocal current_row
+                    # 구역 타이틀 (예: - STACKER CRANE -)
+                    ws_report.cell(row=current_row, column=2).value = eq_title
+                    ws_report.cell(row=current_row, column=2).font = Font(name='맑은 고딕', size=11, bold=True)
+                    ws_report.cell(row=current_row, column=2).alignment = Alignment(horizontal='center', vertical='center')
+                    current_row += 1
                     
-                    cell = ws_report.cell(row=start_row + idx, column=2)
-                    cell.value = f"{idx + 2}. {text}"
+                    # 디폴트 검은 글씨 출력
+                    for i, df_text in enumerate(defaults):
+                        ws_report.cell(row=current_row, column=2).value = df_text
+                        ws_report.cell(row=current_row, column=2).font = Font(name='맑은 고딕', size=11, bold=(i==0), color="000000")
+                        current_row += 1
+                        
+                    # 사용자 입력 조치사항 (2번부터 넘버링)
+                    for idx, text in enumerate(user_lines):
+                        cell = ws_report.cell(row=current_row, column=2)
+                        cell.value = f"{idx + 2}. {text}"
+                        
+                        if "교체 필요" in text:
+                            cell.font = Font(name='맑은 고딕', size=11, bold=True, color="FF0000")
+                        elif "조치" in text or "교체" in text:
+                            cell.font = Font(name='맑은 고딕', size=11, bold=True, color="0000FF")
+                        else:
+                            cell.font = Font(name='맑은 고딕', size=11, bold=False, color="000000")
+                        current_row += 1
                     
-                    base_font = ws_report.cell(row=11, column=2).font
-                    if "교체 필요" in text:
-                        cell.font = Font(name=base_font.name, size=base_font.size, bold=True, color="FF0000")
-                    elif "조치" in text or "교체" in text:
-                        cell.font = Font(name=base_font.name, size=base_font.size, bold=True, color="0000FF")
-                    else:
-                        cell.font = Font(name=base_font.name, size=base_font.size, bold=base_font.bold, color="000000")
+                    current_row += 1 # 설비 간 간격 띄우기
+
+                # 체크박스에서 선택된 설비만 순서대로 작성
+                if "STACKER CRANE" in equipments:
+                    write_equipment_block("STACKER CRANE", " - STACKER CRANE - ", DEFAULT_TEXTS["STACKER CRANE"], sc_lines)
+                if "CONVEYOR" in equipments:
+                    write_equipment_block("CONVEYOR", " - CONVEYOR - ", DEFAULT_TEXTS["CONVEYOR"], cv_lines)
+                if "RGV" in equipments:
+                    write_equipment_block("RGV", " - RGV - ", DEFAULT_TEXTS["RGV"], rgv_lines)
 
                 output_report = io.BytesIO()
                 wb_report.save(output_report)
