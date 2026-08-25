@@ -183,7 +183,7 @@ contents = st.text_area(
 )
 
 # ==========================================
-# 5. 스마트 사진 업로드 (바둑판 2x2 UI)
+# 5. 스마트 사진 업로드 (미리보기 UI)
 # ==========================================
 st.divider()
 st.markdown("### 📷 현장 사진 업로드 (사진 대장용)")
@@ -219,16 +219,15 @@ if st.button("➕ 사진 칸 2개(1줄) 추가하기"):
     st.session_state.photo_blocks += 2
     st.rerun()
 
-# --- 병합 셀 에러 방지 함수 (핵심!) ---
-def get_writable_cell(ws, r, c):
-    cell = ws.cell(row=r, column=c)
+# 💡 [핵심] 병합 셀 에러를 완벽하게 차단하는 무적의 추적 함수!
+def get_safe_cell(ws, row, col):
+    cell = ws.cell(row=row, column=col)
     if type(cell).__name__ == 'MergedCell':
         for mr in ws.merged_cells.ranges:
-            if r >= mr.min_row and r <= mr.max_row and c >= mr.min_col and c <= mr.max_col:
+            if mr.min_row <= row <= mr.max_row and mr.min_col <= col <= mr.max_col:
                 return ws.cell(row=mr.min_row, column=mr.min_col)
     return cell
 
-# --- 정렬 및 페이지 넘김 로직 ---
 def sort_rules(text):
     is_need_replace = 1 if "교체 필요" in text else 0
     match = re.search(r'(#)?(\d+)호기', text)
@@ -247,7 +246,7 @@ def write_equipment_block(ws, defaults, user_lines, row_idx):
         if local_row > 37: 
             row_idx = ((row_idx - 1) // 38 + 1) * 38 + 12
             
-        cell = get_writable_cell(ws, row_idx, 2)
+        cell = get_safe_cell(ws, row_idx, 2)
         cell.value = df_text
         cell.font = Font(name='맑은 고딕', size=11, bold=(i==0), color="000000")
         cell.alignment = Alignment(horizontal='left', vertical='center')
@@ -258,7 +257,7 @@ def write_equipment_block(ws, defaults, user_lines, row_idx):
         if local_row > 37: 
             row_idx = ((row_idx - 1) // 38 + 1) * 38 + 12
             
-        cell = get_writable_cell(ws, row_idx, 2)
+        cell = get_safe_cell(ws, row_idx, 2)
         cell.value = f"{idx + 2}. {text}"
         
         if "교체 필요" in text:
@@ -298,18 +297,19 @@ if st.button(f"🚀 {vendor} {task_type}보고서 생성하기", use_container_w
                 wb_report = openpyxl.load_workbook(template_filename)
                 ws_report = wb_report.active
 
-                ws_report['C5'] = site_name
-                ws_report['C6'] = address
-                ws_report['C9'] = f"{site_name} 정기 {task_type}" 
-                ws_report['C10'] = date_str
-                ws_report['I10'] = workers
-                ws_report['H6'] = author    
-                ws_report['C8'] = manager   
+                # 💡 모든 입력에 get_safe_cell 적용!
+                get_safe_cell(ws_report, 5, 3).value = site_name
+                get_safe_cell(ws_report, 6, 3).value = address
+                get_safe_cell(ws_report, 9, 3).value = f"{site_name} 정기 {task_type}" 
+                get_safe_cell(ws_report, 10, 3).value = date_str
+                get_safe_cell(ws_report, 10, 9).value = workers
+                get_safe_cell(ws_report, 6, 8).value = author    
+                get_safe_cell(ws_report, 8, 3).value = manager   
                 
                 for page in range(5):
                     for r in range(12, 38):
                         actual_r = r + (page * 38)
-                        cell = get_writable_cell(ws_report, actual_r, 2)
+                        cell = get_safe_cell(ws_report, actual_r, 2)
                         cell.value = None
                         cell.font = Font(name='맑은 고딕', size=11, color="000000")
                 
@@ -352,10 +352,11 @@ if st.button(f"🚀 {vendor} {task_type}보고서 생성하기", use_container_w
                     wb_photo = openpyxl.load_workbook('photo_template.xlsx')
                     ws_photo = wb_photo.active
                     
-                    ws_photo['B5'] = f"{site_name} 자동화 창고 {task_type} 사진"
-                    ws_photo['I10'] = f"1. 현장명 : {site_name}"
-                    ws_photo['I14'] = f"3. 작업일자 : {date_str}"
-                    ws_photo['I15'] = f"4. 작업인원 : {workers}"
+                    # 💡 사진 대장 정보 입력에도 안전 함수 적용
+                    get_safe_cell(ws_photo, 5, 2).value = f"{site_name} 자동화 창고 {task_type} 사진"
+                    get_safe_cell(ws_photo, 10, 9).value = f"1. 현장명 : {site_name}"
+                    get_safe_cell(ws_photo, 14, 9).value = f"3. 작업일자 : {date_str}"
+                    get_safe_cell(ws_photo, 15, 9).value = f"4. 작업인원 : {workers}"
 
                     PHOTO_PAGE_ROWS = 85 
 
@@ -369,8 +370,9 @@ if st.button(f"🚀 {vendor} {task_type}보고서 생성하기", use_container_w
                         desc_row = base_row + 16
                         
                         if desc:
-                            ws_photo[f"B{desc_row}"] = desc
-                            ws_photo[f"B{desc_row}"].alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
+                            cell = get_safe_cell(ws_photo, desc_row, 2)
+                            cell.value = desc
+                            cell.alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
                             
                         for j, photo_file in enumerate(photos):
                             if j >= 2: break 
