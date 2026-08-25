@@ -34,8 +34,9 @@ with col_v:
 with col_s:
     site_select = st.selectbox("현장명 중분류", site_dict[vendor])
 
+# [수정] 현장명 직접 입력칸이 선택 즉시 바로 아래에 나타납니다.
 if site_select == "직접 입력...":
-    site_name = st.text_input("새로운 현장명을 직접 입력해주세요")
+    site_name = st.text_input("새로운 현장명을 직접 입력해주세요 (필수)")
 else:
     site_name = site_select
 
@@ -50,7 +51,13 @@ col1, col2 = st.columns(2)
 with col1:
     author = st.text_input("작성자", value="지창현")
 with col2:
-    manager = st.selectbox("담당자 선택", ["김주영 책임", "최진명 차장", "조상길 부장", "직접 입력..."])
+    manager_select = st.selectbox("담당자 선택", ["김주영 책임", "최진명 차장", "조상길 부장", "직접 입력..."])
+
+# [수정] 담당자 직접 입력칸 추가! 
+if manager_select == "직접 입력...":
+    manager = st.text_input("담당자명을 직접 입력해주세요 (필수)")
+else:
+    manager = manager_select
 
 date_range = st.date_input("작업 일자 (기간 선택)", [])
 date_str = ""
@@ -70,7 +77,7 @@ st.markdown(f"**{task_type} 내용 (조치 완료 우선 ➔ 교체 필요 항�
 contents = st.text_area("숫자 번호는 안 적으셔도 됩니다. 기본 항목(1번) 다음인 2번부터 자동 시작됩니다.", height=150)
 
 # ==========================================
-# [신규] 4. 스마트 사진 업로드 및 개별 설명 입력창
+# 4. 스마트 사진 업로드 및 개별 설명 입력창
 # ==========================================
 st.divider()
 st.markdown("### 📷 현장 사진 업로드 (선택사항)")
@@ -80,10 +87,8 @@ photo_descriptions = []
 if uploaded_photos:
     st.info(f"총 {len(uploaded_photos)}장의 사진이 업로드되었습니다. 각 사진의 설명을 입력해주세요.")
     for i, photo in enumerate(uploaded_photos):
-        # 업로드한 사진의 개수만큼 설명 입력칸이 자동으로 생성됨
         desc = st.text_input(f"[{i+1}번 사진] '{photo.name}' 내용", placeholder=f"예: S/C #{i+1}호기 부품 교체 전/후")
         photo_descriptions.append(desc)
-
 
 # --- 정렬 로직 ---
 def sort_rules(text):
@@ -97,8 +102,9 @@ def sort_rules(text):
 # ==========================================
 st.divider()
 if st.button(f"🚀 {vendor} {task_type}보고서 생성하기", use_container_width=True):
-    if not site_name or not contents or not date_str or not author:
-        st.warning("작성자, 현장명, 날짜, 내용은 필수입니다!")
+    # 빈칸 검사 로직에 manager(담당자)도 추가
+    if not site_name or not contents or not date_str or not author or not manager:
+        st.warning("작성자, 담당자, 현장명, 날짜, 내용은 필수입니다!")
     else:
         with st.spinner("엑셀 파일을 만들고 있습니다..."):
             try:
@@ -119,21 +125,21 @@ if st.button(f"🚀 {vendor} {task_type}보고서 생성하기", use_container_w
                 ws_report['H6'] = author    
                 ws_report['C8'] = manager   
                 
-                # 1. 기존 잔여 데이터 깨끗하게 지우기 (18줄 ~ 38줄)
+                # 1. 기존 잔여 데이터 지우기 (18줄 ~ 38줄)
                 for r in range(18, 39):
                     ws_report.cell(row=r, column=2).value = None
                     ws_report.cell(row=r, column=2).font = Font(name='맑은 고딕', size=11, color="000000")
                 
-                # 2. 사용자 입력 내용 정렬 및 기입 (18번째 줄, 2번부터 시작)
+                # 2. 사용자 입력 내용 정렬 및 기입
                 raw_lines = [line.strip() for line in contents.split('\n') if line.strip()]
                 sorted_lines = sorted(raw_lines, key=sort_rules)
                 
                 start_row = 18
                 for idx, text in enumerate(sorted_lines):
-                    if start_row + idx > 38: break # 38줄 넘침 임시 방지
+                    if start_row + idx > 38: break 
                     
                     cell = ws_report.cell(row=start_row + idx, column=2)
-                    cell.value = f"{idx + 2}. {text}" # 2번부터 시작하도록 +2 적용
+                    cell.value = f"{idx + 2}. {text}"
                     
                     base_font = ws_report.cell(row=11, column=2).font
                     if "교체 필요" in text:
@@ -148,7 +154,7 @@ if st.button(f"🚀 {vendor} {task_type}보고서 생성하기", use_container_w
                 output_report.seek(0)
                 
                 # --------------------------------------------------
-                # [B] 사진 대장 엑셀 처리 (사진이 있을 때만 실행!)
+                # [B] 사진 대장 엑셀 처리
                 # --------------------------------------------------
                 output_photo = None
                 if uploaded_photos:
@@ -160,7 +166,6 @@ if st.button(f"🚀 {vendor} {task_type}보고서 생성하기", use_container_w
                     ws_photo['I14'] = f"3. 작업일자 : {date_str}"
                     ws_photo['I15'] = f"4. 작업인원 : {workers}"
 
-                    # 사진이 들어갈 셀 좌표 (B10, D10, B29, D29 ...)
                     photo_coords = [('B', 10), ('D', 10), ('B', 29), ('D', 29), ('B', 48), ('D', 48), ('B', 67), ('D', 67)]
                     
                     for i, photo_file in enumerate(uploaded_photos):
@@ -175,7 +180,6 @@ if st.button(f"🚀 {vendor} {task_type}보고서 생성하기", use_container_w
                         xl_img = Image(img_byte_arr)
                         ws_photo.add_image(xl_img, f"{col}{row}")
                         
-                        # 사진 설명 텍스트 기입 (사진 칸에서 16칸 아래가 텍스트 칸이라고 가정)
                         desc_row = row + 16 
                         ws_photo[f"{col}{desc_row}"] = photo_descriptions[i]
                             
@@ -184,7 +188,7 @@ if st.button(f"🚀 {vendor} {task_type}보고서 생성하기", use_container_w
                     output_photo.seek(0)
 
                 # --------------------------------------------------
-                # [C] 결과 및 다운로드 버튼 출력
+                # [C] 다운로드 버튼 출력
                 # --------------------------------------------------
                 st.success("🎉 생성이 완료되었습니다!")
                 
@@ -199,7 +203,6 @@ if st.button(f"🚀 {vendor} {task_type}보고서 생성하기", use_container_w
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                         use_container_width=True
                     )
-                # 사진 파일이 만들어졌을 때만 2번째 다운로드 버튼 띄우기
                 if output_photo:
                     with col2:
                         st.download_button(
