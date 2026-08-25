@@ -12,9 +12,10 @@ st.set_page_config(page_title="자동창고 보고서 생성기", layout="center
 st.title("📝 현장 보고서 자동 생성기")
 
 # ==========================================
-# [신규] 현장 기억 데이터 불러오기/저장하기 함수
+# [신규] 기억 장치 (현장 데이터 & 임시 저장 데이터)
 # ==========================================
 DATA_FILE = "site_memory.json"
+DRAFT_FILE = "draft_memory.json"
 
 def load_memory():
     if os.path.exists(DATA_FILE):
@@ -25,6 +26,16 @@ def load_memory():
 def save_memory(data):
     with open(DATA_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=4)
+
+def load_draft():
+    if os.path.exists(DRAFT_FILE):
+        with open(DRAFT_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return {"contents": ""}
+
+def save_draft(contents):
+    with open(DRAFT_FILE, "w", encoding="utf-8") as f:
+        json.dump({"contents": contents}, f, ensure_ascii=False)
 
 memory_db = load_memory()
 
@@ -41,7 +52,6 @@ st.divider()
 # ==========================================
 st.markdown("### 🏢 업체 및 현장 정보")
 
-# 💡 기본 목록 외에, 기억상자에 있는 현장들도 '직접 입력...' 위쪽에 불러옵니다.
 site_dict = {
     "MXROBOTICS": ["태준제약"],
     "SFA SERVICE": ["BGF 로지스 광주 현장", "BGF 로지스 진천 현장"],
@@ -52,14 +62,12 @@ col_v, col_s = st.columns(2)
 with col_v:
     vendor = st.selectbox("업체 대분류", list(site_dict.keys()))
 
-# 기억상자(memory_db)에서 해당 업체의 현장들을 추가로 가져와 목록에 합침
 saved_sites = [site for site, info in memory_db.items() if info.get("vendor") == vendor and site not in site_dict[vendor]]
 current_site_list = site_dict[vendor] + saved_sites + ["직접 입력..."]
 
 with col_s:
     site_select = st.selectbox("현장명 중분류", current_site_list)
 
-# 자동 완성을 위한 기본값 세팅
 default_address = ""
 default_manager = "김주영 책임"
 
@@ -67,12 +75,10 @@ if site_select == "직접 입력...":
     site_name = st.text_input("새로운 현장명을 직접 입력해주세요 (필수)")
 else:
     site_name = site_select
-    # 기존 현장을 고르면 기억상자에서 주소와 담당자를 꺼내옵니다.
     if site_name in memory_db:
         default_address = memory_db[site_name].get("address", "")
         default_manager = memory_db[site_name].get("manager", "김주영 책임")
 
-# 꺼내온 주소를 기본값(value)으로 넣음. 당연히 직접 수정도 가능!
 address = st.text_input("현장 주소", value=default_address, placeholder="예: 경기도 용인시...")
 
 st.divider()
@@ -85,7 +91,6 @@ with col1:
     author = st.text_input("작성자", value="지창현")
 with col2:
     manager_list = ["김주영 책임", "최진명 차장", "조상길 부장"]
-    # 기억상자에서 꺼낸 담당자가 기본 목록에 없으면 맨 앞에 추가해줌
     if default_manager not in manager_list:
         manager_list.insert(0, default_manager)
     manager_list.append("직접 입력...")
@@ -115,14 +120,15 @@ st.divider()
 # ==========================================
 st.markdown("### ⚙️ 점검 진행 설비 선택")
 equipments = st.multiselect(
-    "현장에서 점검한 설비를 모두 선택하세요 (선택 시 기본 항목 자동 출력)", 
+    "현장에서 점검한 설비를 모두 선택하세요", 
     ["STACKER CRANE", "CONVEYOR", "RGV", "LIFT"], 
     default=["STACKER CRANE"]
 )
 
+# 💡 [수정] 타이틀을 한 줄로 합쳐서 깔끔하게 출력되도록 변경했습니다.
 DEFAULT_TEXTS = {
     "STACKER CRANE": [
-        "1. S/C 점검 공통사항",
+        "1. [STACKER CRANE] 점검 공통사항",
         "  1) 승강부,주행부,FORK부 구동 MOTOR 및 감속기 발열 상태 및 OIL 누유 상태 점검",
         "  2) CARRIAGE INNER ROLLER, GUIDE ROLLER 구름 상태 및 마모 상태 점검",
         "  3) FORK CHAIN TENSION 점검 및 C/F BEARING, MC GUIDE GREASE 도포",
@@ -130,21 +136,21 @@ DEFAULT_TEXTS = {
         "  5) 주행부 구동 WHEEL,종동 WHEEL, GUIDE ROLLER 구름 상태 및 마모 상태 점검"
     ],
     "CONVEYOR": [
-        "1. C/V 점검 공통사항",
+        "1. [CONVEYOR] 점검 공통사항",
         "  1) 구동 MOTOR 및 감속기 발열/소음 상태 및 OIL 누유 상태 점검",
         "  2) 체인/벨트 장력 상태 및 마모 상태 점검",
         "  3) 구동/종동 ROLLER 구름 상태 점검 및 베어링 소음 확인",
         "  4) 센서(광전, 근접 등) 취부 상태 및 동작 상태 점검"
     ],
     "RGV": [
-        "1. RGV 점검 공통사항",
+        "1. [RGV] 점검 공통사항",
         "  1) 주행부 구동 MOTOR 발열 및 소음, 누유 상태 점검",
         "  2) 주행 WHEEL 및 GUIDE ROLLER 마모 상태 점검",
         "  3) 집전기(Collector) 마모 상태 및 단자대 조임 상태 점검",
         "  4) 충돌 방지 센서 및 통신 장치 상태 점검"
     ],
     "LIFT": [
-        "1. LIFT 점검 공통사항",
+        "1. [LIFT] 점검 공통사항",
         "  1) 승강 MOTOR 및 감속기 소음/발열, 누유 상태 점검",
         "  2) 승강 CHAIN 및 장력, 마모 상태 점검",
         "  3) GUIDE ROLLER 구름 상태 및 마모 상태 점검",
@@ -153,10 +159,31 @@ DEFAULT_TEXTS = {
 }
 
 # ==========================================
-# 4. 작업 내용 메모장
+# 4. 스마트 메모장 (자동 임시 저장)
 # ==========================================
-st.markdown(f"**{task_type} 내용 (설비별 자동 분류 및 2번부터 자동 넘버링)**")
-contents = st.text_area("S/C, CV, RGV, LIFT 등 키워드를 포함해서 적어주시면 코드가 알아서 각 설비 구역으로 나눠서 정리합니다.", height=150)
+col_a, col_b = st.columns([7, 3])
+with col_a:
+    st.markdown(f"**{task_type} 내용 (설비별 자동 분류 및 2번부터 자동 넘버링)**")
+with col_b:
+    if st.button("🗑️ 내용 초기화"):
+        st.session_state.contents = ""
+        save_draft("")
+        st.rerun()
+
+# 접속 시 기존 저장된 내용을 불러옵니다.
+if "contents" not in st.session_state:
+    st.session_state.contents = load_draft().get("contents", "")
+
+# 글을 쓸 때마다 자동으로 파일에 저장하는 마법의 함수
+def update_draft():
+    save_draft(st.session_state.contents)
+
+contents = st.text_area(
+    "S/C, CV, RGV, LIFT 등 키워드를 포함해서 적어주시면 코드가 알아서 각 설비 구역으로 나눠서 정리합니다.", 
+    height=150,
+    key="contents",
+    on_change=update_draft
+)
 
 # ==========================================
 # 5. 스마트 사진 업로드 및 개별 설명 입력창
@@ -172,25 +199,41 @@ if uploaded_photos:
         desc = st.text_input(f"[{i+1}번 사진] '{photo.name}' 내용", placeholder=f"예: S/C #{i+1}호기 부품 교체 전/후")
         photo_descriptions.append(desc)
 
+# --- 정렬 및 페이지 넘김 로직 ---
 def sort_rules(text):
     is_need_replace = 1 if "교체 필요" in text else 0
     match = re.search(r'(#)?(\d+)호기', text)
     ho_number = int(match.group(2)) if match else 9999
     return (is_need_replace, ho_number)
 
-def write_equipment_block(ws, eq_title, defaults, user_lines, row_idx):
-    ws.cell(row=row_idx, column=2).value = eq_title
-    ws.cell(row=row_idx, column=2).font = Font(name='맑은 고딕', size=11, bold=True)
-    ws.cell(row=row_idx, column=2).alignment = Alignment(horizontal='center', vertical='center')
-    row_idx += 1
+# 💡 [신규] 38줄을 계산해서 스마트하게 페이지를 분할하는 핵심 로직
+def write_equipment_block(ws, defaults, user_lines, row_idx):
+    # 현재 블록의 총 줄 수 계산
+    block_size = len(defaults) + len(user_lines) + 1 
+    local_row = (row_idx - 1) % 38 + 1
     
+    # 만약 현재 페이지의 남은 칸보다 쓸 내용이 많고, 새 페이지에 쓰면 다 들어가는 분량이라면 -> 아예 통째로 다음 장으로 넘김!
+    if local_row + block_size > 37 and block_size <= 26:
+        row_idx = ((row_idx - 1) // 38 + 1) * 38 + 12
+    
+    # 1. 디폴트 검은 글씨 출력 (1번 항목)
     for i, df_text in enumerate(defaults):
-        ws.cell(row=row_idx, column=2).value = df_text
-        ws.cell(row=row_idx, column=2).font = Font(name='맑은 고딕', size=11, bold=(i==0), color="000000")
-        ws.cell(row=row_idx, column=2).alignment = Alignment(horizontal='left', vertical='center')
+        local_row = (row_idx - 1) % 38 + 1
+        if local_row > 37: # 페이지 끝 도달 시 다음 장 12번 줄로 점프!
+            row_idx = ((row_idx - 1) // 38 + 1) * 38 + 12
+            
+        cell = ws.cell(row=row_idx, column=2)
+        cell.value = df_text
+        cell.font = Font(name='맑은 고딕', size=11, bold=(i==0), color="000000")
+        cell.alignment = Alignment(horizontal='left', vertical='center')
         row_idx += 1
         
+    # 2. 사용자 입력 조치사항 (2번부터 넘버링)
     for idx, text in enumerate(user_lines):
+        local_row = (row_idx - 1) % 38 + 1
+        if local_row > 37: # 페이지 끝 도달 시 다음 장 12번 줄로 점프!
+            row_idx = ((row_idx - 1) // 38 + 1) * 38 + 12
+            
         cell = ws.cell(row=row_idx, column=2)
         cell.value = f"{idx + 2}. {text}"
         
@@ -204,7 +247,7 @@ def write_equipment_block(ws, eq_title, defaults, user_lines, row_idx):
         cell.alignment = Alignment(horizontal='left', vertical='center')
         row_idx += 1
     
-    row_idx += 1 
+    row_idx += 1 # 설비 간 간격 띄우기
     return row_idx
 
 # ==========================================
@@ -219,18 +262,16 @@ if st.button(f"🚀 {vendor} {task_type}보고서 생성하기", use_container_w
     else:
         with st.spinner("엑셀 파일을 만들고 있습니다..."):
             try:
-                # 💡 [신규] 생성 버튼을 누를 때, 입력한 현장/주소/담당자 정보를 파일에 기억시킵니다!
-                memory_db[site_name] = {
-                    "vendor": vendor,
-                    "address": address,
-                    "manager": manager
-                }
+                # 현장 정보 기억
+                memory_db[site_name] = {"vendor": vendor, "address": address, "manager": manager}
                 save_memory(memory_db)
 
                 prefix_map = {"MXROBOTICS": "mxr", "SFA SERVICE": "sfa", "BLUEONE": "blueone"}
                 template_filename = f"template_{prefix_map[vendor]}_{task_type}.xlsx"
 
+                # --------------------------------------------------
                 # [A] 보고서 엑셀 처리
+                # --------------------------------------------------
                 wb_report = openpyxl.load_workbook(template_filename)
                 ws_report = wb_report.active
 
@@ -242,9 +283,12 @@ if st.button(f"🚀 {vendor} {task_type}보고서 생성하기", use_container_w
                 ws_report['H6'] = author    
                 ws_report['C8'] = manager   
                 
-                for r in range(12, 60):
-                    ws_report.cell(row=r, column=2).value = None
-                    ws_report.cell(row=r, column=2).font = Font(name='맑은 고딕', size=11, color="000000")
+                # 기존 잔여 데이터 깨끗하게 지우기 (최대 5페이지 분량 넉넉하게 초기화)
+                for page in range(5):
+                    for r in range(12, 38):
+                        actual_r = r + (page * 38)
+                        ws_report.cell(row=actual_r, column=2).value = None
+                        ws_report.cell(row=actual_r, column=2).font = Font(name='맑은 고딕', size=11, color="000000")
                 
                 raw_lines = [line.strip() for line in contents.split('\n') if line.strip()]
                 sorted_lines = sorted(raw_lines, key=sort_rules)
@@ -258,22 +302,25 @@ if st.button(f"🚀 {vendor} {task_type}보고서 생성하기", use_container_w
                     elif "S/C" in u_line or "STC" in u_line or "크레인" in u_line or "호기" in u_line: sc_lines.append(line)
                     else: sc_lines.append(line) 
 
+                # 설비별로 엑셀에 작성 시작! (12번 줄부터)
                 current_row = 12
                 
                 if "STACKER CRANE" in equipments:
-                    current_row = write_equipment_block(ws_report, " - STACKER CRANE - ", DEFAULT_TEXTS["STACKER CRANE"], sc_lines, current_row)
+                    current_row = write_equipment_block(ws_report, DEFAULT_TEXTS["STACKER CRANE"], sc_lines, current_row)
                 if "CONVEYOR" in equipments:
-                    current_row = write_equipment_block(ws_report, " - CONVEYOR - ", DEFAULT_TEXTS["CONVEYOR"], cv_lines, current_row)
+                    current_row = write_equipment_block(ws_report, DEFAULT_TEXTS["CONVEYOR"], cv_lines, current_row)
                 if "RGV" in equipments:
-                    current_row = write_equipment_block(ws_report, " - RGV - ", DEFAULT_TEXTS["RGV"], rgv_lines, current_row)
+                    current_row = write_equipment_block(ws_report, DEFAULT_TEXTS["RGV"], rgv_lines, current_row)
                 if "LIFT" in equipments:
-                    current_row = write_equipment_block(ws_report, " - LIFT - ", DEFAULT_TEXTS["LIFT"], lift_lines, current_row)
+                    current_row = write_equipment_block(ws_report, DEFAULT_TEXTS["LIFT"], lift_lines, current_row)
 
                 output_report = io.BytesIO()
                 wb_report.save(output_report)
                 output_report.seek(0)
                 
+                # --------------------------------------------------
                 # [B] 사진 대장 엑셀 처리
+                # --------------------------------------------------
                 output_photo = None
                 if uploaded_photos:
                     wb_photo = openpyxl.load_workbook('photo_template.xlsx')
@@ -305,7 +352,9 @@ if st.button(f"🚀 {vendor} {task_type}보고서 생성하기", use_container_w
                     wb_photo.save(output_photo)
                     output_photo.seek(0)
 
+                # --------------------------------------------------
                 # [C] 다운로드 버튼 출력
+                # --------------------------------------------------
                 st.success("🎉 생성이 완료되었습니다!")
                 
                 col1, col2 = st.columns(2)
