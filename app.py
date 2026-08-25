@@ -71,7 +71,7 @@ workers = st.text_input("작업자명 및 인원", placeholder="예: 최진명 �
 st.divider()
 
 # ==========================================
-# [신규] 3. 설비 선택 및 기본 점검 항목 세팅
+# 3. 설비 선택 및 기본 점검 항목 세팅
 # ==========================================
 st.markdown("### ⚙️ 점검 진행 설비 선택")
 equipments = st.multiselect(
@@ -133,6 +133,39 @@ def sort_rules(text):
     ho_number = int(match.group(2)) if match else 9999
     return (is_need_replace, ho_number)
 
+# --- 엑셀에 설비 구역을 작성해주는 함수 (에러 수정됨) ---
+def write_equipment_block(ws, eq_title, defaults, user_lines, row_idx):
+    # 구역 타이틀
+    ws.cell(row=row_idx, column=2).value = eq_title
+    ws.cell(row=row_idx, column=2).font = Font(name='맑은 고딕', size=11, bold=True)
+    ws.cell(row=row_idx, column=2).alignment = Alignment(horizontal='center', vertical='center')
+    row_idx += 1
+    
+    # 디폴트 검은 글씨 출력
+    for i, df_text in enumerate(defaults):
+        ws.cell(row=row_idx, column=2).value = df_text
+        ws.cell(row=row_idx, column=2).font = Font(name='맑은 고딕', size=11, bold=(i==0), color="000000")
+        ws.cell(row=row_idx, column=2).alignment = Alignment(horizontal='left', vertical='center')
+        row_idx += 1
+        
+    # 사용자 입력 조치사항 (2번부터 넘버링)
+    for idx, text in enumerate(user_lines):
+        cell = ws.cell(row=row_idx, column=2)
+        cell.value = f"{idx + 2}. {text}"
+        
+        if "교체 필요" in text:
+            cell.font = Font(name='맑은 고딕', size=11, bold=True, color="FF0000")
+        elif "조치" in text or "교체" in text:
+            cell.font = Font(name='맑은 고딕', size=11, bold=True, color="0000FF")
+        else:
+            cell.font = Font(name='맑은 고딕', size=11, bold=False, color="000000")
+            
+        cell.alignment = Alignment(horizontal='left', vertical='center')
+        row_idx += 1
+    
+    row_idx += 1 # 설비 간 간격 띄우기
+    return row_idx
+
 # ==========================================
 # 6. 엑셀 생성 실행
 # ==========================================
@@ -166,7 +199,6 @@ if st.button(f"🚀 {vendor} {task_type}보고서 생성하기", use_container_w
                 for r in range(12, 60):
                     ws_report.cell(row=r, column=2).value = None
                     ws_report.cell(row=r, column=2).font = Font(name='맑은 고딕', size=11, color="000000")
-                    ws_report.cell(row=r, column=2).alignment = Alignment(horizontal='left', vertical='center')
                 
                 # 2. 사용자 입력 내용 정렬 및 설비별 분류
                 raw_lines = [line.strip() for line in contents.split('\n') if line.strip()]
@@ -178,47 +210,17 @@ if st.button(f"🚀 {vendor} {task_type}보고서 생성하기", use_container_w
                     if "RGV" in u_line: rgv_lines.append(line)
                     elif "CV" in u_line or "CONVEYOR" in u_line or "컨베이어" in u_line: cv_lines.append(line)
                     elif "S/C" in u_line or "STC" in u_line or "크레인" in u_line or "호기" in u_line: sc_lines.append(line)
-                    else: sc_lines.append(line) # 키워드가 없으면 기본적으로 S/C에 배정
+                    else: sc_lines.append(line) 
 
-                # 3. 설비별 엑셀 기입 로직 (기본 텍스트 + 사용자 입력)
+                # 3. 체크박스에서 선택된 설비만 순서대로 작성
                 current_row = 12
                 
-                def write_equipment_block(eq_name, eq_title, defaults, user_lines):
-                    nonlocal current_row
-                    # 구역 타이틀 (예: - STACKER CRANE -)
-                    ws_report.cell(row=current_row, column=2).value = eq_title
-                    ws_report.cell(row=current_row, column=2).font = Font(name='맑은 고딕', size=11, bold=True)
-                    ws_report.cell(row=current_row, column=2).alignment = Alignment(horizontal='center', vertical='center')
-                    current_row += 1
-                    
-                    # 디폴트 검은 글씨 출력
-                    for i, df_text in enumerate(defaults):
-                        ws_report.cell(row=current_row, column=2).value = df_text
-                        ws_report.cell(row=current_row, column=2).font = Font(name='맑은 고딕', size=11, bold=(i==0), color="000000")
-                        current_row += 1
-                        
-                    # 사용자 입력 조치사항 (2번부터 넘버링)
-                    for idx, text in enumerate(user_lines):
-                        cell = ws_report.cell(row=current_row, column=2)
-                        cell.value = f"{idx + 2}. {text}"
-                        
-                        if "교체 필요" in text:
-                            cell.font = Font(name='맑은 고딕', size=11, bold=True, color="FF0000")
-                        elif "조치" in text or "교체" in text:
-                            cell.font = Font(name='맑은 고딕', size=11, bold=True, color="0000FF")
-                        else:
-                            cell.font = Font(name='맑은 고딕', size=11, bold=False, color="000000")
-                        current_row += 1
-                    
-                    current_row += 1 # 설비 간 간격 띄우기
-
-                # 체크박스에서 선택된 설비만 순서대로 작성
                 if "STACKER CRANE" in equipments:
-                    write_equipment_block("STACKER CRANE", " - STACKER CRANE - ", DEFAULT_TEXTS["STACKER CRANE"], sc_lines)
+                    current_row = write_equipment_block(ws_report, " - STACKER CRANE - ", DEFAULT_TEXTS["STACKER CRANE"], sc_lines, current_row)
                 if "CONVEYOR" in equipments:
-                    write_equipment_block("CONVEYOR", " - CONVEYOR - ", DEFAULT_TEXTS["CONVEYOR"], cv_lines)
+                    current_row = write_equipment_block(ws_report, " - CONVEYOR - ", DEFAULT_TEXTS["CONVEYOR"], cv_lines, current_row)
                 if "RGV" in equipments:
-                    write_equipment_block("RGV", " - RGV - ", DEFAULT_TEXTS["RGV"], rgv_lines)
+                    current_row = write_equipment_block(ws_report, " - RGV - ", DEFAULT_TEXTS["RGV"], rgv_lines, current_row)
 
                 output_report = io.BytesIO()
                 wb_report.save(output_report)
