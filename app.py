@@ -183,7 +183,7 @@ contents = st.text_area(
 )
 
 # ==========================================
-# 5. 스마트 사진 업로드 (미리보기 완벽 구현!)
+# 5. 스마트 사진 업로드 (바둑판 2x2 UI)
 # ==========================================
 st.divider()
 st.markdown("### 📷 현장 사진 업로드 (사진 대장용)")
@@ -204,17 +204,13 @@ for i in range(0, st.session_state.photo_blocks, 2):
                     st.markdown(f"**[{block_idx+1}번 칸]**")
                     photos = st.file_uploader(f"➕ 사진 추가 (최대 2장)", type=['png', 'jpg', 'jpeg'], accept_multiple_files=True, key=f"photo_{block_idx}", label_visibility="collapsed")
                     
-                    # 💡 [미리보기 표시 기능] 사진이 업로드되면 즉시 보여줍니다.
+                    # 💡 [완전 수정] 스트림릿 고유 기능으로 다이렉트 출력! 썸네일 무조건 나옵니다.
                     if photos:
                         p_cols = st.columns(2)
                         for p_idx, p_file in enumerate(photos[:2]):
                             with p_cols[p_idx]:
-                                try:
-                                    img_preview = PILImage.open(p_file)
-                                    st.image(img_preview, use_column_width=True)
-                                    p_file.seek(0) # 화면에 보여준 뒤 엑셀 작업을 위해 파일 포인터 되돌리기
-                                except:
-                                    st.caption("미리보기 불가")
+                                st.image(p_file, use_container_width=True)
+                                p_file.seek(0) # 엑셀 저장을 위해 포인터(읽기 위치) 초기화
                     
                     desc = st.text_area("설명", key=f"desc_{block_idx}", height=68, placeholder="이 칸의 설명을 입력하세요.", label_visibility="collapsed")
                     photo_data.append((block_idx, photos, desc))
