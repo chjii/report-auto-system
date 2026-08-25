@@ -5,9 +5,28 @@ from openpyxl.drawing.image import Image
 from PIL import Image as PILImage
 import io
 import re
+import json
+import os
 
 st.set_page_config(page_title="자동창고 보고서 생성기", layout="centered")
 st.title("📝 현장 보고서 자동 생성기")
+
+# ==========================================
+# [신규] 현장 기억 데이터 불러오기/저장하기 함수
+# ==========================================
+DATA_FILE = "site_memory.json"
+
+def load_memory():
+    if os.path.exists(DATA_FILE):
+        with open(DATA_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return {}
+
+def save_memory(data):
+    with open(DATA_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=4)
+
+memory_db = load_memory()
 
 # ==========================================
 # 0. 작업 분류 (공사 / 점검)
@@ -22,24 +41,39 @@ st.divider()
 # ==========================================
 st.markdown("### 🏢 업체 및 현장 정보")
 
+# 💡 기본 목록 외에, 기억상자에 있는 현장들도 '직접 입력...' 위쪽에 불러옵니다.
 site_dict = {
-    "MXROBOTICS": ["태준제약", "직접 입력..."],
-    "SFA SERVICE": ["BGF 로지스 광주 현장", "BGF 로지스 진천 현장", "직접 입력..."],
-    "BLUEONE": ["유한킴벌리 충주공장", "직접 입력..."]
+    "MXROBOTICS": ["태준제약"],
+    "SFA SERVICE": ["BGF 로지스 광주 현장", "BGF 로지스 진천 현장"],
+    "BLUEONE": ["유한킴벌리 충주공장"]
 }
 
 col_v, col_s = st.columns(2)
 with col_v:
     vendor = st.selectbox("업체 대분류", list(site_dict.keys()))
+
+# 기억상자(memory_db)에서 해당 업체의 현장들을 추가로 가져와 목록에 합침
+saved_sites = [site for site, info in memory_db.items() if info.get("vendor") == vendor and site not in site_dict[vendor]]
+current_site_list = site_dict[vendor] + saved_sites + ["직접 입력..."]
+
 with col_s:
-    site_select = st.selectbox("현장명 중분류", site_dict[vendor])
+    site_select = st.selectbox("현장명 중분류", current_site_list)
+
+# 자동 완성을 위한 기본값 세팅
+default_address = ""
+default_manager = "김주영 책임"
 
 if site_select == "직접 입력...":
     site_name = st.text_input("새로운 현장명을 직접 입력해주세요 (필수)")
 else:
     site_name = site_select
+    # 기존 현장을 고르면 기억상자에서 주소와 담당자를 꺼내옵니다.
+    if site_name in memory_db:
+        default_address = memory_db[site_name].get("address", "")
+        default_manager = memory_db[site_name].get("manager", "김주영 책임")
 
-address = st.text_input("현장 주소", placeholder="예: 경기도 용인시...")
+# 꺼내온 주소를 기본값(value)으로 넣음. 당연히 직접 수정도 가능!
+address = st.text_input("현장 주소", value=default_address, placeholder="예: 경기도 용인시...")
 
 st.divider()
 
@@ -50,7 +84,13 @@ col1, col2 = st.columns(2)
 with col1:
     author = st.text_input("작성자", value="지창현")
 with col2:
-    manager_select = st.selectbox("담당자 선택", ["김주영 책임", "최진명 차장", "조상길 부장", "직접 입력..."])
+    manager_list = ["김주영 책임", "최진명 차장", "조상길 부장"]
+    # 기억상자에서 꺼낸 담당자가 기본 목록에 없으면 맨 앞에 추가해줌
+    if default_manager not in manager_list:
+        manager_list.insert(0, default_manager)
+    manager_list.append("직접 입력...")
+    
+    manager_select = st.selectbox("담당자 선택", manager_list, index=manager_list.index(default_manager))
 
 if manager_select == "직접 입력...":
     manager = st.text_input("담당자명을 직접 입력해주세요 (필수)")
@@ -80,7 +120,6 @@ equipments = st.multiselect(
     default=["STACKER CRANE"]
 )
 
-# 💡 각 설비별 기본 점검 공통사항 (검은 글씨 디폴트값)
 DEFAULT_TEXTS = {
     "STACKER CRANE": [
         "1. S/C 점검 공통사항",
@@ -133,14 +172,12 @@ if uploaded_photos:
         desc = st.text_input(f"[{i+1}번 사진] '{photo.name}' 내용", placeholder=f"예: S/C #{i+1}호기 부품 교체 전/후")
         photo_descriptions.append(desc)
 
-# --- 정렬 로직 ---
 def sort_rules(text):
     is_need_replace = 1 if "교체 필요" in text else 0
     match = re.search(r'(#)?(\d+)호기', text)
     ho_number = int(match.group(2)) if match else 9999
     return (is_need_replace, ho_number)
 
-# --- 엑셀에 설비 구역을 작성해주는 함수 ---
 def write_equipment_block(ws, eq_title, defaults, user_lines, row_idx):
     ws.cell(row=row_idx, column=2).value = eq_title
     ws.cell(row=row_idx, column=2).font = Font(name='맑은 고딕', size=11, bold=True)
@@ -182,12 +219,18 @@ if st.button(f"🚀 {vendor} {task_type}보고서 생성하기", use_container_w
     else:
         with st.spinner("엑셀 파일을 만들고 있습니다..."):
             try:
+                # 💡 [신규] 생성 버튼을 누를 때, 입력한 현장/주소/담당자 정보를 파일에 기억시킵니다!
+                memory_db[site_name] = {
+                    "vendor": vendor,
+                    "address": address,
+                    "manager": manager
+                }
+                save_memory(memory_db)
+
                 prefix_map = {"MXROBOTICS": "mxr", "SFA SERVICE": "sfa", "BLUEONE": "blueone"}
                 template_filename = f"template_{prefix_map[vendor]}_{task_type}.xlsx"
 
-                # --------------------------------------------------
                 # [A] 보고서 엑셀 처리
-                # --------------------------------------------------
                 wb_report = openpyxl.load_workbook(template_filename)
                 ws_report = wb_report.active
 
@@ -230,9 +273,7 @@ if st.button(f"🚀 {vendor} {task_type}보고서 생성하기", use_container_w
                 wb_report.save(output_report)
                 output_report.seek(0)
                 
-                # --------------------------------------------------
                 # [B] 사진 대장 엑셀 처리
-                # --------------------------------------------------
                 output_photo = None
                 if uploaded_photos:
                     wb_photo = openpyxl.load_workbook('photo_template.xlsx')
@@ -264,9 +305,7 @@ if st.button(f"🚀 {vendor} {task_type}보고서 생성하기", use_container_w
                     wb_photo.save(output_photo)
                     output_photo.seek(0)
 
-                # --------------------------------------------------
                 # [C] 다운로드 버튼 출력
-                # --------------------------------------------------
                 st.success("🎉 생성이 완료되었습니다!")
                 
                 col1, col2 = st.columns(2)
