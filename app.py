@@ -76,7 +76,7 @@ st.divider()
 st.markdown("### ⚙️ 점검 진행 설비 선택")
 equipments = st.multiselect(
     "현장에서 점검한 설비를 모두 선택하세요 (선택 시 기본 항목 자동 출력)", 
-    ["STACKER CRANE", "CONVEYOR", "RGV"], 
+    ["STACKER CRANE", "CONVEYOR", "RGV", "LIFT"], 
     default=["STACKER CRANE"]
 )
 
@@ -103,6 +103,13 @@ DEFAULT_TEXTS = {
         "  2) 주행 WHEEL 및 GUIDE ROLLER 마모 상태 점검",
         "  3) 집전기(Collector) 마모 상태 및 단자대 조임 상태 점검",
         "  4) 충돌 방지 센서 및 통신 장치 상태 점검"
+    ],
+    "LIFT": [
+        "1. LIFT 점검 공통사항",
+        "  1) 승강 MOTOR 및 감속기 소음/발열, 누유 상태 점검",
+        "  2) 승강 CHAIN 및 장력, 마모 상태 점검",
+        "  3) GUIDE ROLLER 구름 상태 및 마모 상태 점검",
+        "  4) 상/하한 리미트 센서 및 낙하 방지 장치 동작 상태 점검"
     ]
 }
 
@@ -110,7 +117,7 @@ DEFAULT_TEXTS = {
 # 4. 작업 내용 메모장
 # ==========================================
 st.markdown(f"**{task_type} 내용 (설비별 자동 분류 및 2번부터 자동 넘버링)**")
-contents = st.text_area("S/C, CV, RGV 등 키워드를 포함해서 적어주시면 코드가 알아서 각 설비 구역으로 나눠서 정리합니다.", height=150)
+contents = st.text_area("S/C, CV, RGV, LIFT 등 키워드를 포함해서 적어주시면 코드가 알아서 각 설비 구역으로 나눠서 정리합니다.", height=150)
 
 # ==========================================
 # 5. 스마트 사진 업로드 및 개별 설명 입력창
@@ -133,22 +140,19 @@ def sort_rules(text):
     ho_number = int(match.group(2)) if match else 9999
     return (is_need_replace, ho_number)
 
-# --- 엑셀에 설비 구역을 작성해주는 함수 (에러 수정됨) ---
+# --- 엑셀에 설비 구역을 작성해주는 함수 ---
 def write_equipment_block(ws, eq_title, defaults, user_lines, row_idx):
-    # 구역 타이틀
     ws.cell(row=row_idx, column=2).value = eq_title
     ws.cell(row=row_idx, column=2).font = Font(name='맑은 고딕', size=11, bold=True)
     ws.cell(row=row_idx, column=2).alignment = Alignment(horizontal='center', vertical='center')
     row_idx += 1
     
-    # 디폴트 검은 글씨 출력
     for i, df_text in enumerate(defaults):
         ws.cell(row=row_idx, column=2).value = df_text
         ws.cell(row=row_idx, column=2).font = Font(name='맑은 고딕', size=11, bold=(i==0), color="000000")
         ws.cell(row=row_idx, column=2).alignment = Alignment(horizontal='left', vertical='center')
         row_idx += 1
         
-    # 사용자 입력 조치사항 (2번부터 넘버링)
     for idx, text in enumerate(user_lines):
         cell = ws.cell(row=row_idx, column=2)
         cell.value = f"{idx + 2}. {text}"
@@ -163,7 +167,7 @@ def write_equipment_block(ws, eq_title, defaults, user_lines, row_idx):
         cell.alignment = Alignment(horizontal='left', vertical='center')
         row_idx += 1
     
-    row_idx += 1 # 설비 간 간격 띄우기
+    row_idx += 1 
     return row_idx
 
 # ==========================================
@@ -195,24 +199,22 @@ if st.button(f"🚀 {vendor} {task_type}보고서 생성하기", use_container_w
                 ws_report['H6'] = author    
                 ws_report['C8'] = manager   
                 
-                # 1. 기존 잔여 데이터 지우기 (12줄 ~ 60줄 넉넉하게 초기화)
                 for r in range(12, 60):
                     ws_report.cell(row=r, column=2).value = None
                     ws_report.cell(row=r, column=2).font = Font(name='맑은 고딕', size=11, color="000000")
                 
-                # 2. 사용자 입력 내용 정렬 및 설비별 분류
                 raw_lines = [line.strip() for line in contents.split('\n') if line.strip()]
                 sorted_lines = sorted(raw_lines, key=sort_rules)
                 
-                sc_lines, cv_lines, rgv_lines, other_lines = [], [], [], []
+                sc_lines, cv_lines, rgv_lines, lift_lines = [], [], [], []
                 for line in sorted_lines:
                     u_line = line.upper()
                     if "RGV" in u_line: rgv_lines.append(line)
+                    elif "LIFT" in u_line or "리프트" in u_line: lift_lines.append(line)
                     elif "CV" in u_line or "CONVEYOR" in u_line or "컨베이어" in u_line: cv_lines.append(line)
                     elif "S/C" in u_line or "STC" in u_line or "크레인" in u_line or "호기" in u_line: sc_lines.append(line)
                     else: sc_lines.append(line) 
 
-                # 3. 체크박스에서 선택된 설비만 순서대로 작성
                 current_row = 12
                 
                 if "STACKER CRANE" in equipments:
@@ -221,6 +223,8 @@ if st.button(f"🚀 {vendor} {task_type}보고서 생성하기", use_container_w
                     current_row = write_equipment_block(ws_report, " - CONVEYOR - ", DEFAULT_TEXTS["CONVEYOR"], cv_lines, current_row)
                 if "RGV" in equipments:
                     current_row = write_equipment_block(ws_report, " - RGV - ", DEFAULT_TEXTS["RGV"], rgv_lines, current_row)
+                if "LIFT" in equipments:
+                    current_row = write_equipment_block(ws_report, " - LIFT - ", DEFAULT_TEXTS["LIFT"], lift_lines, current_row)
 
                 output_report = io.BytesIO()
                 wb_report.save(output_report)
