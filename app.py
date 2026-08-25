@@ -12,7 +12,7 @@ st.set_page_config(page_title="자동창고 보고서 생성기", layout="center
 st.title("📝 현장 보고서 자동 생성기")
 
 # ==========================================
-# [신규] 기억 장치 (현장 데이터 & 임시 저장 데이터)
+# 기억 장치 (현장 데이터 & 임시 저장 데이터)
 # ==========================================
 DATA_FILE = "site_memory.json"
 DRAFT_FILE = "draft_memory.json"
@@ -125,7 +125,6 @@ equipments = st.multiselect(
     default=["STACKER CRANE"]
 )
 
-# 💡 [수정] 타이틀을 한 줄로 합쳐서 깔끔하게 출력되도록 변경했습니다.
 DEFAULT_TEXTS = {
     "STACKER CRANE": [
         "1. [STACKER CRANE] 점검 공통사항",
@@ -170,11 +169,9 @@ with col_b:
         save_draft("")
         st.rerun()
 
-# 접속 시 기존 저장된 내용을 불러옵니다.
 if "contents" not in st.session_state:
     st.session_state.contents = load_draft().get("contents", "")
 
-# 글을 쓸 때마다 자동으로 파일에 저장하는 마법의 함수
 def update_draft():
     save_draft(st.session_state.contents)
 
@@ -186,18 +183,33 @@ contents = st.text_area(
 )
 
 # ==========================================
-# 5. 스마트 사진 업로드 및 개별 설명 입력창
+# 5. 스마트 사진 업로드 (칸 단위 분할 UI)
 # ==========================================
 st.divider()
-st.markdown("### 📷 현장 사진 업로드 (선택사항)")
-uploaded_photos = st.file_uploader("사진을 업로드하면 '사진 대장'이 추가로 생성됩니다.", type=['png', 'jpg', 'jpeg'], accept_multiple_files=True)
+st.markdown("### 📷 현장 사진 업로드 (사진 대장용)")
 
-photo_descriptions = []
-if uploaded_photos:
-    st.info(f"총 {len(uploaded_photos)}장의 사진이 업로드되었습니다. 각 사진의 설명을 입력해주세요.")
-    for i, photo in enumerate(uploaded_photos):
-        desc = st.text_input(f"[{i+1}번 사진] '{photo.name}' 내용", placeholder=f"예: S/C #{i+1}호기 부품 교체 전/후")
-        photo_descriptions.append(desc)
+# 기본 4칸으로 시작
+if "photo_blocks" not in st.session_state:
+    st.session_state.photo_blocks = 4
+
+photo_data = []
+
+for i in range(st.session_state.photo_blocks):
+    with st.container():
+        st.markdown(f"**[{i+1}번 칸]**")
+        col_p, col_d = st.columns([1, 1])
+        with col_p:
+            # 한 칸 안에서 여러 장 선택 가능 (코드가 알아서 최대 2장까지만 엑셀에 넣음)
+            photos = st.file_uploader(f"사진 등록 (최대 2장)", type=['png', 'jpg', 'jpeg'], accept_multiple_files=True, key=f"photo_{i}", label_visibility="collapsed")
+        with col_d:
+            desc = st.text_area(f"설명 입력", key=f"desc_{i}", height=100, placeholder="해당 칸의 엑셀 밑부분에 들어갈 설명을 적어주세요.", label_visibility="collapsed")
+        
+        photo_data.append((photos, desc))
+        st.write("") # 간격 띄우기
+
+if st.button("➕ 사진 칸 추가하기"):
+    st.session_state.photo_blocks += 1
+    st.rerun()
 
 # --- 정렬 및 페이지 넘김 로직 ---
 def sort_rules(text):
@@ -206,20 +218,16 @@ def sort_rules(text):
     ho_number = int(match.group(2)) if match else 9999
     return (is_need_replace, ho_number)
 
-# 💡 [신규] 38줄을 계산해서 스마트하게 페이지를 분할하는 핵심 로직
 def write_equipment_block(ws, defaults, user_lines, row_idx):
-    # 현재 블록의 총 줄 수 계산
     block_size = len(defaults) + len(user_lines) + 1 
     local_row = (row_idx - 1) % 38 + 1
     
-    # 만약 현재 페이지의 남은 칸보다 쓸 내용이 많고, 새 페이지에 쓰면 다 들어가는 분량이라면 -> 아예 통째로 다음 장으로 넘김!
     if local_row + block_size > 37 and block_size <= 26:
         row_idx = ((row_idx - 1) // 38 + 1) * 38 + 12
     
-    # 1. 디폴트 검은 글씨 출력 (1번 항목)
     for i, df_text in enumerate(defaults):
         local_row = (row_idx - 1) % 38 + 1
-        if local_row > 37: # 페이지 끝 도달 시 다음 장 12번 줄로 점프!
+        if local_row > 37: 
             row_idx = ((row_idx - 1) // 38 + 1) * 38 + 12
             
         cell = ws.cell(row=row_idx, column=2)
@@ -228,10 +236,9 @@ def write_equipment_block(ws, defaults, user_lines, row_idx):
         cell.alignment = Alignment(horizontal='left', vertical='center')
         row_idx += 1
         
-    # 2. 사용자 입력 조치사항 (2번부터 넘버링)
     for idx, text in enumerate(user_lines):
         local_row = (row_idx - 1) % 38 + 1
-        if local_row > 37: # 페이지 끝 도달 시 다음 장 12번 줄로 점프!
+        if local_row > 37: 
             row_idx = ((row_idx - 1) // 38 + 1) * 38 + 12
             
         cell = ws.cell(row=row_idx, column=2)
@@ -247,7 +254,7 @@ def write_equipment_block(ws, defaults, user_lines, row_idx):
         cell.alignment = Alignment(horizontal='left', vertical='center')
         row_idx += 1
     
-    row_idx += 1 # 설비 간 간격 띄우기
+    row_idx += 1 
     return row_idx
 
 # ==========================================
@@ -262,7 +269,6 @@ if st.button(f"🚀 {vendor} {task_type}보고서 생성하기", use_container_w
     else:
         with st.spinner("엑셀 파일을 만들고 있습니다..."):
             try:
-                # 현장 정보 기억
                 memory_db[site_name] = {"vendor": vendor, "address": address, "manager": manager}
                 save_memory(memory_db)
 
@@ -283,7 +289,6 @@ if st.button(f"🚀 {vendor} {task_type}보고서 생성하기", use_container_w
                 ws_report['H6'] = author    
                 ws_report['C8'] = manager   
                 
-                # 기존 잔여 데이터 깨끗하게 지우기 (최대 5페이지 분량 넉넉하게 초기화)
                 for page in range(5):
                     for r in range(12, 38):
                         actual_r = r + (page * 38)
@@ -302,7 +307,6 @@ if st.button(f"🚀 {vendor} {task_type}보고서 생성하기", use_container_w
                     elif "S/C" in u_line or "STC" in u_line or "크레인" in u_line or "호기" in u_line: sc_lines.append(line)
                     else: sc_lines.append(line) 
 
-                # 설비별로 엑셀에 작성 시작! (12번 줄부터)
                 current_row = 12
                 
                 if "STACKER CRANE" in equipments:
@@ -322,7 +326,11 @@ if st.button(f"🚀 {vendor} {task_type}보고서 생성하기", use_container_w
                 # [B] 사진 대장 엑셀 처리
                 # --------------------------------------------------
                 output_photo = None
-                if uploaded_photos:
+                
+                # 업로드된 사진이나 작성된 설명이 단 1개라도 있는지 확인
+                has_photo_data = any(len(photos) > 0 or desc.strip() for photos, desc in photo_data)
+                
+                if has_photo_data:
                     wb_photo = openpyxl.load_workbook('photo_template.xlsx')
                     ws_photo = wb_photo.active
                     
@@ -331,22 +339,38 @@ if st.button(f"🚀 {vendor} {task_type}보고서 생성하기", use_container_w
                     ws_photo['I14'] = f"3. 작업일자 : {date_str}"
                     ws_photo['I15'] = f"4. 작업인원 : {workers}"
 
-                    photo_coords = [('B', 10), ('D', 10), ('B', 29), ('D', 29), ('B', 48), ('D', 48), ('B', 67), ('D', 67)]
-                    
-                    for i, photo_file in enumerate(uploaded_photos):
-                        if i >= len(photo_coords): break 
-                        col, row = photo_coords[i]
+                    # (참고) 엑셀 파일이 여러 페이지로 구성되어 있다고 가정할 때,
+                    # 한 페이지당 약 85줄의 길이를 가진다고 계산하여 다음 페이지로 자동으로 넘어가는 공식입니다.
+                    # 엑셀 양식의 세로 길이에 따라 85라는 숫자를 수정해야 할 수 있습니다.
+                    PHOTO_PAGE_ROWS = 85 
+
+                    for i, (photos, desc) in enumerate(photo_data):
+                        if not photos and not desc:
+                            continue
+                            
+                        # 블록 인덱스에 따라 1페이지의 위치를 결정하고, 페이지가 넘어가면 85줄을 더해줍니다.
+                        page = i // 4
+                        block_idx = i % 4
+                        base_row = (page * PHOTO_PAGE_ROWS) + 10 + (block_idx * 19)
+                        desc_row = base_row + 16
                         
-                        img_pil = PILImage.open(photo_file)
-                        img_pil.thumbnail((350, 350)) 
-                        img_byte_arr = io.BytesIO()
-                        img_pil.save(img_byte_arr, format='PNG')
-                        img_byte_arr.seek(0)
-                        xl_img = Image(img_byte_arr)
-                        ws_photo.add_image(xl_img, f"{col}{row}")
-                        
-                        desc_row = row + 16 
-                        ws_photo[f"{col}{desc_row}"] = photo_descriptions[i]
+                        # 텍스트 설명 기입 (B열에 통합해서 적음)
+                        if desc:
+                            ws_photo[f"B{desc_row}"] = desc
+                            ws_photo[f"B{desc_row}"].alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
+                            
+                        # 해당 칸에 등록된 사진들을 B열과 D열에 순서대로 넣음 (최대 2장)
+                        for j, photo_file in enumerate(photos):
+                            if j >= 2: break 
+                            col = 'B' if j == 0 else 'D'
+                            
+                            img_pil = PILImage.open(photo_file)
+                            img_pil.thumbnail((350, 350)) 
+                            img_byte_arr = io.BytesIO()
+                            img_pil.save(img_byte_arr, format='PNG')
+                            img_byte_arr.seek(0)
+                            xl_img = Image(img_byte_arr)
+                            ws_photo.add_image(xl_img, f"{col}{base_row}")
                             
                     output_photo = io.BytesIO()
                     wb_photo.save(output_photo)
