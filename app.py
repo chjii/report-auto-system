@@ -204,13 +204,12 @@ for i in range(0, st.session_state.photo_blocks, 2):
                     st.markdown(f"**[{block_idx+1}번 칸]**")
                     photos = st.file_uploader(f"➕ 사진 추가 (최대 2장)", type=['png', 'jpg', 'jpeg'], accept_multiple_files=True, key=f"photo_{block_idx}", label_visibility="collapsed")
                     
-                    # 💡 [완전 수정] 스트림릿 고유 기능으로 다이렉트 출력! 썸네일 무조건 나옵니다.
                     if photos:
                         p_cols = st.columns(2)
                         for p_idx, p_file in enumerate(photos[:2]):
                             with p_cols[p_idx]:
                                 st.image(p_file, use_container_width=True)
-                                p_file.seek(0) # 엑셀 저장을 위해 포인터(읽기 위치) 초기화
+                                p_file.seek(0)
                     
                     desc = st.text_area("설명", key=f"desc_{block_idx}", height=68, placeholder="이 칸의 설명을 입력하세요.", label_visibility="collapsed")
                     photo_data.append((block_idx, photos, desc))
@@ -219,6 +218,15 @@ st.write("")
 if st.button("➕ 사진 칸 2개(1줄) 추가하기"):
     st.session_state.photo_blocks += 2
     st.rerun()
+
+# --- 병합 셀 에러 방지 함수 (핵심!) ---
+def get_writable_cell(ws, r, c):
+    cell = ws.cell(row=r, column=c)
+    if type(cell).__name__ == 'MergedCell':
+        for mr in ws.merged_cells.ranges:
+            if r >= mr.min_row and r <= mr.max_row and c >= mr.min_col and c <= mr.max_col:
+                return ws.cell(row=mr.min_row, column=mr.min_col)
+    return cell
 
 # --- 정렬 및 페이지 넘김 로직 ---
 def sort_rules(text):
@@ -239,7 +247,7 @@ def write_equipment_block(ws, defaults, user_lines, row_idx):
         if local_row > 37: 
             row_idx = ((row_idx - 1) // 38 + 1) * 38 + 12
             
-        cell = ws.cell(row=row_idx, column=2)
+        cell = get_writable_cell(ws, row_idx, 2)
         cell.value = df_text
         cell.font = Font(name='맑은 고딕', size=11, bold=(i==0), color="000000")
         cell.alignment = Alignment(horizontal='left', vertical='center')
@@ -250,7 +258,7 @@ def write_equipment_block(ws, defaults, user_lines, row_idx):
         if local_row > 37: 
             row_idx = ((row_idx - 1) // 38 + 1) * 38 + 12
             
-        cell = ws.cell(row=row_idx, column=2)
+        cell = get_writable_cell(ws, row_idx, 2)
         cell.value = f"{idx + 2}. {text}"
         
         if "교체 필요" in text:
@@ -301,8 +309,9 @@ if st.button(f"🚀 {vendor} {task_type}보고서 생성하기", use_container_w
                 for page in range(5):
                     for r in range(12, 38):
                         actual_r = r + (page * 38)
-                        ws_report.cell(row=actual_r, column=2).value = None
-                        ws_report.cell(row=actual_r, column=2).font = Font(name='맑은 고딕', size=11, color="000000")
+                        cell = get_writable_cell(ws_report, actual_r, 2)
+                        cell.value = None
+                        cell.font = Font(name='맑은 고딕', size=11, color="000000")
                 
                 raw_lines = [line.strip() for line in contents.split('\n') if line.strip()]
                 sorted_lines = sorted(raw_lines, key=sort_rules)
