@@ -219,7 +219,6 @@ if st.button("➕ 사진 칸 2개(1줄) 추가하기"):
     st.session_state.photo_blocks += 2
     st.rerun()
 
-# 💡 [핵심] 병합 셀 에러를 완벽하게 차단하는 무적의 추적 함수!
 def get_safe_cell(ws, row, col):
     cell = ws.cell(row=row, column=col)
     if type(cell).__name__ == 'MergedCell':
@@ -297,7 +296,9 @@ if st.button(f"🚀 {vendor} {task_type}보고서 생성하기", use_container_w
                 wb_report = openpyxl.load_workbook(template_filename)
                 ws_report = wb_report.active
 
-                # 💡 모든 입력에 get_safe_cell 적용!
+                # 기존 보고서 이미지 모두 날리기
+                ws_report._images.clear()
+
                 get_safe_cell(ws_report, 5, 3).value = site_name
                 get_safe_cell(ws_report, 6, 3).value = address
                 get_safe_cell(ws_report, 9, 3).value = f"{site_name} 정기 {task_type}" 
@@ -352,13 +353,27 @@ if st.button(f"🚀 {vendor} {task_type}보고서 생성하기", use_container_w
                     wb_photo = openpyxl.load_workbook('photo_template.xlsx')
                     ws_photo = wb_photo.active
                     
-                    # 💡 사진 대장 정보 입력에도 안전 함수 적용
+                    # 💡 1. 템플릿에 기존에 들어있던 사진들을 백지장처럼 싹 다 지웁니다!
+                    ws_photo._images.clear()
+                    
                     get_safe_cell(ws_photo, 5, 2).value = f"{site_name} 자동화 창고 {task_type} 사진"
                     get_safe_cell(ws_photo, 10, 9).value = f"1. 현장명 : {site_name}"
                     get_safe_cell(ws_photo, 14, 9).value = f"3. 작업일자 : {date_str}"
                     get_safe_cell(ws_photo, 15, 9).value = f"4. 작업인원 : {workers}"
 
-                    PHOTO_PAGE_ROWS = 85 
+                    # 💡 2. 아래 숫자들을 실제 엑셀 사진 양식에 맞게 자유롭게 수정하세요!
+                    PHOTO_PAGE_ROWS = 85 # 1페이지가 차지하는 총 세로 줄 수 (예: 1페이지가 85줄로 구성)
+                    FIRST_PHOTO_ROW = 10 # 첫 번째 사진이 들어가는 맨 처음 칸의 줄 번호
+                    BLOCK_HEIGHT = 19    # 사진 한 칸(1블록)이 차지하는 높이 (사진~다음 사진까지의 간격)
+                    DESC_OFFSET = 16     # 사진이 시작되는 줄부터 -> 설명 텍스트가 들어가는 줄까지의 거리
+
+                    # 💡 3. 기존에 적혀있던 설명 텍스트들도 모두 빈칸으로 삭제 (최대 5페이지 분량)
+                    for p in range(5):
+                        for b_idx in range(4): # 한 페이지당 4칸이라고 가정
+                            base_r = (p * PHOTO_PAGE_ROWS) + FIRST_PHOTO_ROW + (b_idx * BLOCK_HEIGHT)
+                            desc_r = base_r + DESC_OFFSET
+                            get_safe_cell(ws_photo, desc_r, 2).value = None # B열 설명칸 지우기
+                            get_safe_cell(ws_photo, desc_r, 4).value = None # D열 설명칸 지우기
 
                     for i, (_, photos, desc) in enumerate(photo_data):
                         if not photos and not desc:
@@ -366,8 +381,10 @@ if st.button(f"🚀 {vendor} {task_type}보고서 생성하기", use_container_w
                             
                         page = i // 4
                         block_idx = i % 4
-                        base_row = (page * PHOTO_PAGE_ROWS) + 10 + (block_idx * 19)
-                        desc_row = base_row + 16
+                        
+                        # 사진 좌표 계산 로직
+                        base_row = (page * PHOTO_PAGE_ROWS) + FIRST_PHOTO_ROW + (block_idx * BLOCK_HEIGHT)
+                        desc_row = base_row + DESC_OFFSET
                         
                         if desc:
                             cell = get_safe_cell(ws_photo, desc_row, 2)
@@ -378,10 +395,11 @@ if st.button(f"🚀 {vendor} {task_type}보고서 생성하기", use_container_w
                             if j >= 2: break 
                             
                             photo_file.seek(0) 
+                            # 첫 번째 사진은 B열, 두 번째 사진은 D열
                             col = 'B' if j == 0 else 'D'
                             
                             img_pil = PILImage.open(photo_file)
-                            img_pil.thumbnail((350, 350)) 
+                            img_pil.thumbnail((350, 350)) # 썸네일 크기도 필요시 조절 가능
                             img_byte_arr = io.BytesIO()
                             img_pil.save(img_byte_arr, format='PNG')
                             img_byte_arr.seek(0)
