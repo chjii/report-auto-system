@@ -183,32 +183,35 @@ contents = st.text_area(
 )
 
 # ==========================================
-# 5. 스마트 사진 업로드 (칸 단위 분할 UI)
+# 5. 스마트 사진 업로드 (바둑판 2x2 UI)
 # ==========================================
 st.divider()
 st.markdown("### 📷 현장 사진 업로드 (사진 대장용)")
+st.caption("실제 엑셀 양식과 동일하게 2칸씩 나란히 배치됩니다. 1칸당 최대 2장의 사진을 넣을 수 있습니다.")
 
-# 기본 4칸으로 시작
+# 기본 4칸 세팅
 if "photo_blocks" not in st.session_state:
     st.session_state.photo_blocks = 4
 
 photo_data = []
 
-for i in range(st.session_state.photo_blocks):
-    with st.container():
-        st.markdown(f"**[{i+1}번 칸]**")
-        col_p, col_d = st.columns([1, 1])
-        with col_p:
-            # 한 칸 안에서 여러 장 선택 가능 (코드가 알아서 최대 2장까지만 엑셀에 넣음)
-            photos = st.file_uploader(f"사진 등록 (최대 2장)", type=['png', 'jpg', 'jpeg'], accept_multiple_files=True, key=f"photo_{i}", label_visibility="collapsed")
-        with col_d:
-            desc = st.text_area(f"설명 입력", key=f"desc_{i}", height=100, placeholder="해당 칸의 엑셀 밑부분에 들어갈 설명을 적어주세요.", label_visibility="collapsed")
-        
-        photo_data.append((photos, desc))
-        st.write("") # 간격 띄우기
+# 2칸씩 묶어서 출력 (2x2 바둑판 형태)
+for i in range(0, st.session_state.photo_blocks, 2):
+    cols = st.columns(2)
+    for j in range(2):
+        block_idx = i + j
+        if block_idx < st.session_state.photo_blocks:
+            with cols[j]:
+                # 시각적인 구분을 위해 박스 느낌 주기
+                with st.container(border=True):
+                    st.markdown(f"**[{block_idx+1}번 칸]**")
+                    photos = st.file_uploader(f"➕ 사진 추가 (최대 2장)", type=['png', 'jpg', 'jpeg'], accept_multiple_files=True, key=f"photo_{block_idx}")
+                    desc = st.text_area("설명", key=f"desc_{block_idx}", height=68, placeholder="이 칸의 설명을 입력하세요.", label_visibility="collapsed")
+                    photo_data.append((block_idx, photos, desc))
 
-if st.button("➕ 사진 칸 추가하기"):
-    st.session_state.photo_blocks += 1
+st.write("")
+if st.button("➕ 사진 칸 2개(1줄) 추가하기"):
+    st.session_state.photo_blocks += 2
     st.rerun()
 
 # --- 정렬 및 페이지 넘김 로직 ---
@@ -327,8 +330,8 @@ if st.button(f"🚀 {vendor} {task_type}보고서 생성하기", use_container_w
                 # --------------------------------------------------
                 output_photo = None
                 
-                # 업로드된 사진이나 작성된 설명이 단 1개라도 있는지 확인
-                has_photo_data = any(len(photos) > 0 or desc.strip() for photos, desc in photo_data)
+                photo_data.sort(key=lambda x: x[0]) # 순서대로 정렬
+                has_photo_data = any(len(photos) > 0 or desc.strip() for _, photos, desc in photo_data)
                 
                 if has_photo_data:
                     wb_photo = openpyxl.load_workbook('photo_template.xlsx')
@@ -339,27 +342,21 @@ if st.button(f"🚀 {vendor} {task_type}보고서 생성하기", use_container_w
                     ws_photo['I14'] = f"3. 작업일자 : {date_str}"
                     ws_photo['I15'] = f"4. 작업인원 : {workers}"
 
-                    # (참고) 엑셀 파일이 여러 페이지로 구성되어 있다고 가정할 때,
-                    # 한 페이지당 약 85줄의 길이를 가진다고 계산하여 다음 페이지로 자동으로 넘어가는 공식입니다.
-                    # 엑셀 양식의 세로 길이에 따라 85라는 숫자를 수정해야 할 수 있습니다.
                     PHOTO_PAGE_ROWS = 85 
 
-                    for i, (photos, desc) in enumerate(photo_data):
+                    for i, (_, photos, desc) in enumerate(photo_data):
                         if not photos and not desc:
                             continue
                             
-                        # 블록 인덱스에 따라 1페이지의 위치를 결정하고, 페이지가 넘어가면 85줄을 더해줍니다.
                         page = i // 4
                         block_idx = i % 4
                         base_row = (page * PHOTO_PAGE_ROWS) + 10 + (block_idx * 19)
                         desc_row = base_row + 16
                         
-                        # 텍스트 설명 기입 (B열에 통합해서 적음)
                         if desc:
                             ws_photo[f"B{desc_row}"] = desc
                             ws_photo[f"B{desc_row}"].alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
                             
-                        # 해당 칸에 등록된 사진들을 B열과 D열에 순서대로 넣음 (최대 2장)
                         for j, photo_file in enumerate(photos):
                             if j >= 2: break 
                             col = 'B' if j == 0 else 'D'
