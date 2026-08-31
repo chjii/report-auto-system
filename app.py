@@ -7,6 +7,7 @@ import io
 import re
 import json
 import os
+from copy import copy
 
 st.set_page_config(page_title="자동창고 보고서 생성기", layout="centered")
 st.title("📝 현장 보고서 자동 생성기")
@@ -125,9 +126,10 @@ equipments = st.multiselect(
     default=["STACKER CRANE"]
 )
 
+# 💡 [수정] 요청하신 대로 타이틀 두 줄을 없애고 "1. 설비명 점검 공통사항" 한 줄로 통일했습니다.
 DEFAULT_TEXTS = {
     "STACKER CRANE": [
-        "1. [STACKER CRANE] 점검 공통사항",
+        "1. STACKER CRANE 점검 공통사항",
         "  1) 승강부,주행부,FORK부 구동 MOTOR 및 감속기 발열 상태 및 OIL 누유 상태 점검",
         "  2) CARRIAGE INNER ROLLER, GUIDE ROLLER 구름 상태 및 마모 상태 점검",
         "  3) FORK CHAIN TENSION 점검 및 C/F BEARING, MC GUIDE GREASE 도포",
@@ -135,21 +137,21 @@ DEFAULT_TEXTS = {
         "  5) 주행부 구동 WHEEL,종동 WHEEL, GUIDE ROLLER 구름 상태 및 마모 상태 점검"
     ],
     "CONVEYOR": [
-        "1. [CONVEYOR] 점검 공통사항",
+        "1. CONVEYOR 점검 공통사항",
         "  1) 구동 MOTOR 및 감속기 발열/소음 상태 및 OIL 누유 상태 점검",
         "  2) 체인/벨트 장력 상태 및 마모 상태 점검",
         "  3) 구동/종동 ROLLER 구름 상태 점검 및 베어링 소음 확인",
         "  4) 센서(광전, 근접 등) 취부 상태 및 동작 상태 점검"
     ],
     "RGV": [
-        "1. [RGV] 점검 공통사항",
+        "1. RGV 점검 공통사항",
         "  1) 주행부 구동 MOTOR 발열 및 소음, 누유 상태 점검",
         "  2) 주행 WHEEL 및 GUIDE ROLLER 마모 상태 점검",
         "  3) 집전기(Collector) 마모 상태 및 단자대 조임 상태 점검",
         "  4) 충돌 방지 센서 및 통신 장치 상태 점검"
     ],
     "LIFT": [
-        "1. [LIFT] 점검 공통사항",
+        "1. LIFT 점검 공통사항",
         "  1) 승강 MOTOR 및 감속기 소음/발열, 누유 상태 점검",
         "  2) 승강 CHAIN 및 장력, 마모 상태 점검",
         "  3) GUIDE ROLLER 구름 상태 및 마모 상태 점검",
@@ -238,43 +240,89 @@ def sort_rules(text):
     ho_number = int(match.group(2)) if match else 9999
     return (is_need_replace, ho_number)
 
-def write_equipment_block(ws, defaults, user_lines, row_idx):
-    block_size = len(defaults) + len(user_lines) + 1 
-    local_row = (row_idx - 1) % 38 + 1
+# 💡 [핵심] 페이지 복사 함수 (1~38줄을 그대로 새 페이지에 창조합니다)
+def ensure_page_exists(ws, target_page, copied_pages):
+    if target_page in copied_pages:
+        return
     
-    if local_row + block_size > 37 and block_size <= 26:
-        row_idx = ((row_idx - 1) // 38 + 1) * 38 + 12
+    start_row_target = target_page * 38 + 1
     
-    for i, df_text in enumerate(defaults):
-        local_row = (row_idx - 1) % 38 + 1
-        if local_row > 37: 
-            row_idx = ((row_idx - 1) // 38 + 1) * 38 + 12
+    for r in range(1, 39):
+        # 행 높이 복사
+        if ws.row_dimensions[r].height is not None:
+            ws.row_dimensions[start_row_target + r - 1].height = ws.row_dimensions[r].height
+        
+        for c in range(1, ws.max_column + 1):
+            src = ws.cell(row=r, column=c)
+            tgt = ws.cell(row=start_row_target + r - 1, column=c)
+            tgt.value = src.value
+            if src.has_style:
+                tgt.font = copy(src.font)
+                tgt.border = copy(src.border)
+                tgt.fill = copy(src.fill)
+                tgt.alignment = copy(src.alignment)
+                tgt.number_format = src.number_format
+                
+    # 병합 셀 복사
+    from openpyxl.worksheet.cell_range import CellRange
+    new_merges = []
+    for mc in ws.merged_cells.ranges:
+        if 1 <= mc.min_row <= 38:
+            new_range = CellRange(min_col=mc.min_col, min_row=mc.min_row + target_page*38, max_col=mc.max_col, max_row=mc.max_row + target_page*38)
+            new_merges.append(new_range)
             
-        cell = get_safe_cell(ws, row_idx, 2)
-        cell.value = df_text
-        cell.font = Font(name='맑은 고딕', size=11, bold=(i==0), color="000000")
-        cell.alignment = Alignment(horizontal='left', vertical='center')
-        row_idx += 1
+    for nm in new_merges:
+        try:
+            ws.merge_cells(str(nm))
+        except:
+            pass
+            
+    copied_pages.add(target_page)
+
+# 💡 [핵심] 굴림체 고정 및 스마트 페이지 분할 로직
+def write_equipment_block(ws, defaults, user_lines, row_idx, copied_pages):
+    block_size = len(defaults) + len(user_lines) + 1 
+    current_page = (row_idx - 1) // 38
+    data_end_row = current_page * 38 + 38
+    
+    # 만약 현재 블록이 남은 칸보다 크고, 통째로 넘겼을 때 한 페이지(27줄) 안에 들어간다면 -> 통째로 다음 장으로 넘김!
+    if row_idx + block_size - 1 > data_end_row and block_size <= 27:
+        current_page += 1
+        ensure_page_exists(ws, current_page, copied_pages)
+        row_idx = current_page * 38 + 12
+    
+    # 작성할 줄 리스트 생성
+    lines_to_write = []
+    for i, df_text in enumerate(defaults):
+        lines_to_write.append((df_text, i==0, "000000", 'left'))
         
     for idx, text in enumerate(user_lines):
-        local_row = (row_idx - 1) % 38 + 1
-        if local_row > 37: 
-            row_idx = ((row_idx - 1) // 38 + 1) * 38 + 12
+        color, bold = "000000", False
+        if "교체 필요" in text: color, bold = "FF0000", True
+        elif "조치" in text or "교체" in text: color, bold = "0000FF", True
+        lines_to_write.append((f"{idx + 2}. {text}", bold, color, 'left'))
+        
+    # 엑셀 기입 시작
+    for text, is_bold, color, align in lines_to_write:
+        current_page = (row_idx - 1) // 38
+        data_end_row = current_page * 38 + 38
+        
+        # 글을 쓰다가 38줄을 넘어가버리면 -> 즉시 다음 페이지 창조 후 좌표 이동!
+        if row_idx > data_end_row: 
+            current_page += 1
+            ensure_page_exists(ws, current_page, copied_pages)
+            row_idx = current_page * 38 + 12
             
         cell = get_safe_cell(ws, row_idx, 2)
-        cell.value = f"{idx + 2}. {text}"
+        cell.value = text
         
-        if "교체 필요" in text:
-            cell.font = Font(name='맑은 고딕', size=11, bold=True, color="FF0000")
-        elif "조치" in text or "교체" in text:
-            cell.font = Font(name='맑은 고딕', size=11, bold=True, color="0000FF")
-        else:
-            cell.font = Font(name='맑은 고딕', size=11, bold=False, color="000000")
-            
-        cell.alignment = Alignment(horizontal='left', vertical='center')
+        # [핵심] 기존 폰트 크기 유지 + 무조건 '굴림체' 적용
+        sz = cell.font.size if cell.font and cell.font.size else 11
+        cell.font = Font(name='굴림체', size=sz, bold=is_bold, color=color)
+        cell.alignment = Alignment(horizontal=align, vertical='center')
         row_idx += 1
     
-    row_idx += 1 
+    row_idx += 1 # 설비 간 간격 띄우기
     return row_idx
 
 # ==========================================
@@ -301,6 +349,7 @@ if st.button(f"🚀 {vendor} {task_type}보고서 생성하기", use_container_w
                 wb_report = openpyxl.load_workbook(template_filename)
                 ws_report = wb_report.active
 
+                # 1페이지(0번 인덱스) 헤더 정보 세팅
                 get_safe_cell(ws_report, 5, 3).value = site_name
                 get_safe_cell(ws_report, 6, 3).value = address
                 get_safe_cell(ws_report, 9, 3).value = f"{site_name} 정기 {task_type}" 
@@ -309,12 +358,14 @@ if st.button(f"🚀 {vendor} {task_type}보고서 생성하기", use_container_w
                 get_safe_cell(ws_report, 6, 8).value = author    
                 get_safe_cell(ws_report, 8, 3).value = manager   
                 
-                for page in range(5):
-                    for r in range(12, 38):
-                        actual_r = r + (page * 38)
-                        cell = get_safe_cell(ws_report, actual_r, 2)
-                        cell.value = None
-                        cell.font = Font(name='맑은 고딕', size=11, color="000000")
+                # 1페이지 내용 구역(12~38줄) 초기화 (다음 페이지 복사 시 깨끗하게 넘어가기 위함)
+                for r in range(12, 39):
+                    cell = get_safe_cell(ws_report, r, 2)
+                    cell.value = None
+                    sz = cell.font.size if cell.font and cell.font.size else 11
+                    cell.font = Font(name='굴림체', size=sz, color="000000")
+                
+                copied_pages = {0} # 0페이지는 이미 존재함
                 
                 raw_lines = [line.strip() for line in contents.split('\n') if line.strip()]
                 sorted_lines = sorted(raw_lines, key=sort_rules)
@@ -331,13 +382,13 @@ if st.button(f"🚀 {vendor} {task_type}보고서 생성하기", use_container_w
                 current_row = 12
                 
                 if "STACKER CRANE" in equipments:
-                    current_row = write_equipment_block(ws_report, DEFAULT_TEXTS["STACKER CRANE"], sc_lines, current_row)
+                    current_row = write_equipment_block(ws_report, DEFAULT_TEXTS["STACKER CRANE"], sc_lines, current_row, copied_pages)
                 if "CONVEYOR" in equipments:
-                    current_row = write_equipment_block(ws_report, DEFAULT_TEXTS["CONVEYOR"], cv_lines, current_row)
+                    current_row = write_equipment_block(ws_report, DEFAULT_TEXTS["CONVEYOR"], cv_lines, current_row, copied_pages)
                 if "RGV" in equipments:
-                    current_row = write_equipment_block(ws_report, DEFAULT_TEXTS["RGV"], rgv_lines, current_row)
+                    current_row = write_equipment_block(ws_report, DEFAULT_TEXTS["RGV"], rgv_lines, current_row, copied_pages)
                 if "LIFT" in equipments:
-                    current_row = write_equipment_block(ws_report, DEFAULT_TEXTS["LIFT"], lift_lines, current_row)
+                    current_row = write_equipment_block(ws_report, DEFAULT_TEXTS["LIFT"], lift_lines, current_row, copied_pages)
 
                 output_report = io.BytesIO()
                 wb_report.save(output_report)
@@ -355,13 +406,10 @@ if st.button(f"🚀 {vendor} {task_type}보고서 생성하기", use_container_w
                     wb_photo = openpyxl.load_workbook('photo_template.xlsx')
                     ws_photo = wb_photo.active
                     
-                    # 💡 [핵심] 기존 템플릿에 남아있는 가짜(더미) 사진들 싹 다 날려버리기!
                     if hasattr(ws_photo, '_images'):
                         ws_photo._images.clear()
                     
                     PHOTO_PAGE_ROWS = 85 
-
-                    # 💡 [핵심] 기존 템플릿에 남아있는 더미 텍스트(설명)들 최대 5페이지까지 싹 지우기!
                     for page in range(5):
                         for block_idx in range(4):
                             base_row = (page * PHOTO_PAGE_ROWS) + 10 + (block_idx * 19)
@@ -369,13 +417,11 @@ if st.button(f"🚀 {vendor} {task_type}보고서 생성하기", use_container_w
                             clean_cell = get_safe_cell(ws_photo, desc_row, 2)
                             clean_cell.value = None
 
-                    # 타이틀 및 정보 입력
                     get_safe_cell(ws_photo, 5, 2).value = f"{site_name} 자동화 창고 {task_type} 사진"
                     get_safe_cell(ws_photo, 10, 9).value = f"1. 현장명 : {site_name}"
                     get_safe_cell(ws_photo, 14, 9).value = f"3. 작업일자 : {date_str}"
                     get_safe_cell(ws_photo, 15, 9).value = f"4. 작업인원 : {workers}"
 
-                    # 새 사진과 설명 채워넣기
                     for i, (_, photos, desc) in enumerate(photo_data):
                         if not photos and not desc:
                             continue
@@ -388,6 +434,8 @@ if st.button(f"🚀 {vendor} {task_type}보고서 생성하기", use_container_w
                         if desc:
                             cell = get_safe_cell(ws_photo, desc_row, 2)
                             cell.value = desc
+                            sz = cell.font.size if cell.font and cell.font.size else 11
+                            cell.font = Font(name='굴림체', size=sz, color="000000")
                             cell.alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
                             
                         for j, photo_file in enumerate(photos):
