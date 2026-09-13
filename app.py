@@ -131,7 +131,6 @@ else:
 
 site_options = filtered_sites + ["직접 입력..."]
 
-# 세션 기본값 초기화
 if "target_site" not in st.session_state:
     st.session_state.target_site = site_options[0]
     first_info = site_db.get(site_options[0], {})
@@ -253,10 +252,11 @@ contents = st.text_area(
 )
 
 # ==========================================
-# 5. 사진 대장 업로드 (2x2 그리드)
+# 5. 사진 대장 업로드 (공사/점검 명칭 동적 반영)
 # ==========================================
 st.divider()
-st.markdown("### 📷 현장 사진 대장 (선택사항)")
+st.markdown(f"### 📷 현장 {task_type} 사진 대장 (선택사항)")
+st.caption(f"1페이지당 4칸(좌상단, 우상단, 좌하단, 우하단) 순서대로 엑셀에 깔끔하게 배치됩니다.")
 
 if "photo_blocks" not in st.session_state:
     st.session_state.photo_blocks = 4
@@ -269,9 +269,13 @@ for i in range(0, st.session_state.photo_blocks, 2):
         b_idx = i + j
         if b_idx < st.session_state.photo_blocks:
             with cols[j]:
+                pos_label = "좌측" if (b_idx % 2 == 0) else "우측"
+                row_label = "상단" if (b_idx % 4 < 2) else "하단"
+                page_label = f"{b_idx // 4 + 1}페이지"
+                
                 with st.container(border=True):
-                    st.markdown(f"**[{b_idx+1}번 칸]**")
-                    photos = st.file_uploader(f"사진 등록", type=['png', 'jpg', 'jpeg'], accept_multiple_files=True, key=f"p_{b_idx}", label_visibility="collapsed")
+                    st.markdown(f"**[{b_idx+1}번 칸] ({page_label} {row_label} {pos_label})**")
+                    photos = st.file_uploader(f"사진 등록 (최대 2장)", type=['png', 'jpg', 'jpeg'], accept_multiple_files=True, key=f"p_{b_idx}", label_visibility="collapsed")
                     if photos:
                         p_cols = st.columns(2)
                         for p_i, p_f in enumerate(photos[:2]):
@@ -282,7 +286,7 @@ for i in range(0, st.session_state.photo_blocks, 2):
                                     p_f.seek(0)
                                 except:
                                     st.caption("미리보기 오류")
-                    desc = st.text_area("설명", key=f"d_{b_idx}", height=65, placeholder="사진 설명을 입력하세요", label_visibility="collapsed")
+                    desc = st.text_area(f"{task_type} 설명", key=f"d_{b_idx}", height=65, placeholder=f"{task_type} 사진 설명을 입력하세요", label_visibility="collapsed")
                     photo_data.append((b_idx, photos, desc))
 
 if st.button("➕ 사진 칸 2개 추가"):
@@ -376,7 +380,7 @@ def write_equipment_block(ws, defaults, user_lines, row_idx, copied_pages):
     return row_idx
 
 # ==========================================
-# 6. 보고서 생성 실행 (MXR 양식 표준)
+# 6. 보고서 생성 실행
 # ==========================================
 st.divider()
 if st.button(f"🚀 {task_type}보고서 생성하기", use_container_width=True):
@@ -387,7 +391,6 @@ if st.button(f"🚀 {task_type}보고서 생성하기", use_container_width=True
     else:
         with st.spinner("보고서를 생성하고 있습니다..."):
             try:
-                # 현장 정보 저장
                 site_db[site_name] = {
                     "vendor": site_db.get(site_name, {}).get("vendor", "MXRobotics"),
                     "address": address,
@@ -451,7 +454,9 @@ if st.button(f"🚀 {task_type}보고서 생성하기", use_container_width=True
                 wb_report.save(output_report)
                 output_report.seek(0)
 
-                # 사진 대장 처리
+                # ==========================================
+                # 사진 대장 처리 (2x2 그리드 정밀 좌표 배치)
+                # ==========================================
                 output_photo = None
                 photo_data.sort(key=lambda x: x[0])
                 has_photo_data = any(len(p) > 0 or d.strip() for _, p, d in photo_data)
@@ -460,55 +465,86 @@ if st.button(f"🚀 {task_type}보고서 생성하기", use_container_width=True
                     wb_photo = openpyxl.load_workbook('photo_template.xlsx')
                     ws_photo = wb_photo.active
 
+                    # 기존 더미 이미지 완벽 제거
                     if hasattr(ws_photo, '_images'):
                         ws_photo._images.clear()
 
-                    PHOTO_PAGE_ROWS = 85
-                    for page in range(5):
-                        for block_idx in range(4):
-                            base_row = (page * PHOTO_PAGE_ROWS) + 10 + (block_idx * 19)
-                            desc_row = base_row + 16
-                            clean_cell = get_safe_cell(ws_photo, desc_row, 2)
-                            clean_cell.value = None
+                    PHOTO_PAGE_ROWS = 40  # 표준 A4 1페이지(4칸) 행 길이 기준 오프셋
 
+                    # 기존 더미 텍스트 초기화
+                    for p_i in range(5):
+                        p_offset = p_i * PHOTO_PAGE_ROWS
+                        for r_desc in [26, 45]:
+                            for c_col in [2, 4]:
+                                cell = get_safe_cell(ws_photo, p_offset + r_desc, c_col)
+                                cell.value = None
+
+                    # 사진 대장 헤더 명칭 동적 반영
                     get_safe_cell(ws_photo, 5, 2).value = f"{site_name} 자동화 창고 {task_type} 사진"
                     get_safe_cell(ws_photo, 10, 9).value = f"1. 현장명 : {site_name}"
                     get_safe_cell(ws_photo, 14, 9).value = f"3. 작업일자 : {date_str}"
                     get_safe_cell(ws_photo, 15, 9).value = f"4. 작업인원 : {workers}"
 
-                    for i, (_, photos, desc) in enumerate(photo_data):
+                    # 1페이지당 4칸 (0: 좌상, 1: 우상, 2: 좌하, 3: 우하)
+                    # 0번 칸: B10 (설명: B26)
+                    # 1번 칸: D10 (설명: D26)
+                    # 2번 칸: B29 (설명: B45)
+                    # 3번 칸: D29 (설명: D45)
+                    FRAME_CONFIG = {
+                        0: {"col_str": "B", "col_num": 2, "img_row": 10, "desc_row": 26},
+                        1: {"col_str": "D", "col_num": 4, "img_row": 10, "desc_row": 26},
+                        2: {"col_str": "B", "col_num": 2, "img_row": 29, "desc_row": 45},
+                        3: {"col_str": "D", "col_num": 4, "img_row": 29, "desc_row": 45},
+                    }
+
+                    for b_idx, photos, desc in photo_data:
                         if not photos and not desc:
                             continue
-                        page = i // 4
-                        block_idx = i % 4
-                        base_row = (page * PHOTO_PAGE_ROWS) + 10 + (block_idx * 19)
-                        desc_row = base_row + 16
 
+                        page_num = b_idx // 4
+                        pos_in_page = b_idx % 4
+                        cfg = FRAME_CONFIG[pos_in_page]
+
+                        target_img_row = (page_num * PHOTO_PAGE_ROWS) + cfg["img_row"]
+                        target_desc_row = (page_num * PHOTO_PAGE_ROWS) + cfg["desc_row"]
+                        target_col_str = cfg["col_str"]
+                        target_col_num = cfg["col_num"]
+
+                        # 설명 텍스트 기입
                         if desc:
-                            cell = get_safe_cell(ws_photo, desc_row, 2)
-                            cell.value = desc
-                            sz = cell.font.size if cell.font and cell.font.size else 11
-                            cell.font = Font(name='굴림체', size=sz, color="000000")
-                            cell.alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
+                            d_cell = get_safe_cell(ws_photo, target_desc_row, target_col_num)
+                            d_cell.value = desc
+                            sz = d_cell.font.size if d_cell.font and d_cell.font.size else 11
+                            d_cell.font = Font(name='굴림체', size=sz, color="000000")
+                            d_cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
 
-                        for j, p_file in enumerate(photos):
-                            if j >= 2:
-                                break
+                        # 이미지 기입 (1장일 때와 2장일 때 너비 자동 배분)
+                        num_imgs = min(len(photos), 2)
+                        for img_i, p_file in enumerate(photos[:2]):
                             p_file.seek(0)
-                            col = 'B' if j == 0 else 'D'
                             img_pil = PILImage.open(p_file)
-                            img_pil.thumbnail((350, 350))
+
+                            # 2장일 때는 가로로 나란히 들어가도록 폭을 165px로 축소
+                            target_w = 340 if num_imgs == 1 else 165
+                            target_h = 280
+                            img_pil.thumbnail((target_w, target_h))
+
                             img_byte_arr = io.BytesIO()
                             img_pil.save(img_byte_arr, format='PNG')
                             img_byte_arr.seek(0)
                             xl_img = Image(img_byte_arr)
-                            ws_photo.add_image(xl_img, f"{col}{base_row}")
+
+                            # 2장 중 2번째 장은 같은 칸 내에서 살짝 우측에 배치되도록 오프셋 적용
+                            if num_imgs == 2 and img_i == 1:
+                                xl_img.left = 135  # 이미지 내부 오프셋(pt)
+                            
+                            ws_photo.add_image(xl_img, f"{target_col_str}{target_img_row}")
 
                     output_photo = io.BytesIO()
                     wb_photo.save(output_photo)
                     output_photo.seek(0)
 
-                st.success("🎉 작성이 완료되었습니다!")
+                st.success(f"🎉 {task_type}보고서 작성이 완료되었습니다!")
                 c1, c2 = st.columns(2)
                 with c1:
                     st.download_button(
