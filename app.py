@@ -73,28 +73,38 @@ BASE_SITE_DB = {
     "코오롱글로텍": {"vendor": "MXRobotics", "address": "충청남도 천안시", "equipments": ["STACKER CRANE", "CONVEYOR", "RGV"], "pm": "채우석"}
 }
 
-DEFAULT_SC_PHOTO_ITEMS = [
-    {"part": "CARRIAGE부", "default": "1) FORK C.F BEARING CLEANING"},
-    {"part": "CARRIAGE부", "default": "2) FORK C.F BEARING GREASE 도포"},
-    {"part": "CARRIAGE부", "default": "3) FORK CHAIN TENSION 확인"},
-    {"part": "CARRIAGE부", "default": ""},
-    {"part": "주행부", "default": "1) 주행 WHEEL 상태 확인"},
-    {"part": "주행부", "default": "2) 주행 GUIDE ROLLER 상태 확인"},
-    {"part": "주행부", "default": "3) 주행 MOTOR BRAKE GAP 확인"},
-    {"part": "주행부", "default": ""},
-    {"part": "승강부", "default": "1) 외측 GUIDE ROLLER 상태 확인"},
-    {"part": "승강부", "default": "2) 내측 GUIDE ROLLER 상태 확인"},
-    {"part": "승강부", "default": "3) 승강 MOTOR BRAKE GAP 확인"},
-    {"part": "승강부", "default": ""},
-    {"part": "상부부", "default": "1) 상부 GUIDE ROLLER 상태 확인"},
-    {"part": "상부부", "default": "2) 상부 BRAKE ROLLER 상태 확인"},
-    {"part": "상부부", "default": ""},
-    {"part": "상부부", "default": ""},
-    {"part": "집전부", "default": "1) 집전기 ROLLER 및 SHOE 상태 확인"},
-    {"part": "집전부", "default": "2) 집전기 CLEANING"},
-    {"part": "집전부", "default": "3) 기상반 PANEL 단자대 REBOLTING"},
-    {"part": "집전부", "default": "4) 각 SENSOR 단자대 REBOLTING"},
-]
+SC_PARTS_CONFIG = {
+    "CARRIAGE부": [
+        "1) FORK C.F BEARING CLEANING",
+        "2) FORK C.F BEARING GREASE 도포",
+        "3) FORK CHAIN TENSION 확인",
+        ""
+    ],
+    "주행부": [
+        "1) 주행 WHEEL 상태 확인",
+        "2) 주행 GUIDE ROLLER 상태 확인",
+        "3) 주행 MOTOR BRAKE GAP 확인",
+        ""
+    ],
+    "승강부": [
+        "1) 외측 GUIDE ROLLER 상태 확인",
+        "2) 내측 GUIDE ROLLER 상태 확인",
+        "3) 승강 MOTOR BRAKE GAP 확인",
+        ""
+    ],
+    "상부부": [
+        "1) 상부 GUIDE ROLLER 상태 확인",
+        "2) 상부 BRAKE ROLLER 상태 확인",
+        "",
+        ""
+    ],
+    "집전부": [
+        "1) 집전기 ROLLER 및 SHOE 상태 확인",
+        "2) 집전기 CLEANING",
+        "3) 기상반 PANEL 단자대 REBOLTING",
+        "4) 각 SENSOR 단자대 REBOLTING"
+    ]
+}
 
 DEFAULT_TEXTS = {
     "STACKER CRANE": [
@@ -254,7 +264,7 @@ def update_draft():
 contents = st.text_area("S/C, CV, RGV, LIFT 키워드가 포함되면 설비별로 자동 분류됩니다.", height=130, key="contents", on_change=update_draft)
 
 # ==========================================
-# 4. 현장 사진 대장 (S/C 부위별 표준 입력창)
+# 4. 현장 사진 대장 (S/C 부위별 표준 입력창 - 중복 Key 에러 완전 해결)
 # ==========================================
 st.divider()
 st.markdown(f"### 📷 {task_type} 사진 대장")
@@ -264,31 +274,26 @@ photo_upload_data = []
 if "STACKER CRANE" in equipments:
     st.info("💡 STACKER CRANE 부위별 표준 점검 항목입니다. 사진 업로드 시 해당 항목 텍스트와 함께 엑셀에 들어갑니다.")
     
-    parts_unique = ["CARRIAGE부", "주행부", "승강부", "상부부", "집전부"]
-    tabs = st.tabs(parts_unique)
+    tabs = st.tabs(list(SC_PARTS_CONFIG.keys()))
     
-    for t_idx, part_name in enumerate(parts_unique):
+    for t_idx, (part_name, default_items) in enumerate(SC_PARTS_CONFIG.items()):
         with tabs[t_idx]:
-            part_items = [item for item in DEFAULT_SC_PHOTO_ITEMS if item["part"] == part_name]
             p_cols = st.columns(2)
-            
-            for p_sub_idx, item in enumerate(part_items):
-                col_target = p_cols[p_sub_idx % 2]
-                global_idx = DEFAULT_SC_PHOTO_ITEMS.index(item)
-                
-                with col_target:
+            for item_idx, def_val in enumerate(default_items):
+                target_col = p_cols[item_idx % 2]
+                with target_col:
                     with st.container(border=True):
                         custom_desc = st.text_input(
-                            f"항목명 #{p_sub_idx+1}", 
-                            value=item["default"], 
-                            key=f"sc_desc_{global_idx}", 
+                            f"항목명 #{item_idx+1}", 
+                            value=def_val, 
+                            key=f"sc_desc_{t_idx}_{item_idx}", 
                             placeholder="점검 내용 직접 입력"
                         )
                         photos = st.file_uploader(
                             f"사진 등록 (최대 2장)", 
                             type=['png', 'jpg', 'jpeg'], 
                             accept_multiple_files=True, 
-                            key=f"sc_photo_{global_idx}"
+                            key=f"sc_photo_{t_idx}_{item_idx}"
                         )
                         if photos:
                             preview_cols = st.columns(2)
@@ -434,7 +439,6 @@ if st.button(f"🚀 {task_type}보고서 및 사진대장 생성하기", use_con
                 wb_report = openpyxl.load_workbook(template_filename)
                 ws_report = wb_report.active
 
-                # 헤더 세팅
                 get_safe_cell(ws_report, 5, 3).value = site_name
                 get_safe_cell(ws_report, 6, 3).value = address
                 get_safe_cell(ws_report, 9, 3).value = f"{site_name} 정기 {task_type}"
@@ -482,9 +486,7 @@ if st.button(f"🚀 {task_type}보고서 및 사진대장 생성하기", use_con
                 wb_report.save(output_report)
                 output_report.seek(0)
 
-                # ==========================================
-                # 사진 대장 생성 (MXR 템플릿 4칸/85줄 기반)
-                # ==========================================
+                # 사진 대장 생성
                 output_photo = None
                 valid_photos = [(p, d) for p, d in photo_upload_data if (p and len(p) > 0) or (d and d.strip())]
 
@@ -492,14 +494,13 @@ if st.button(f"🚀 {task_type}보고서 및 사진대장 생성하기", use_con
                     wb_photo = openpyxl.load_workbook('photo_template.xlsx')
                     ws_photo = wb_photo.active
 
-                    # 기존 더미 이미지 제거
                     if hasattr(ws_photo, '_images'):
                         ws_photo._images.clear()
 
                     PHOTO_PAGE_ROWS = 85
 
-                    # 기존 템플릿의 더미 텍스트만 완전히 비우기
-                    for p_i in range(5):
+                    # 기존 더미 텍스트 초기화
+                    for p_i in range(10):
                         p_offset = p_i * PHOTO_PAGE_ROWS
                         for b in range(4):
                             desc_r = p_offset + 10 + (b * 19) + 16
