@@ -13,7 +13,7 @@ st.set_page_config(page_title="자동창고 보고서 생성기", layout="wide")
 st.title("📝 현장 보고서 자동 생성기")
 
 # ==========================================
-# 0. 55개 고객사 마스터 DB 및 S/C 표준 점검 항목
+# 0. 55개 고객사 마스터 DB 및 설정값
 # ==========================================
 BASE_SITE_DB = {
     "아이티센엔텍": {"vendor": "블루원", "address": "강원도 인제군", "equipments": ["STACKER CRANE", "CONVEYOR"], "pm": "김은호 수석"},
@@ -239,8 +239,11 @@ if len(date_range) == 2:
 
 workers = st.text_input("작업자명 및 인원", placeholder="예: 최진명 차장 외 6명")
 
-st.markdown("#### ⚙️ 점검 대상 설비")
-equipments = st.multiselect("설비 목록", ["STACKER CRANE", "CONVEYOR", "RGV", "LIFT"], key="equip_val")
+# 점검일 때만 설비 선택창 출력
+equipments = []
+if task_type == "점검":
+    st.markdown("#### ⚙️ 점검 대상 설비")
+    equipments = st.multiselect("설비 목록", ["STACKER CRANE", "CONVEYOR", "RGV", "LIFT"], key="equip_val")
 
 # ==========================================
 # 3. 작업 내용 메모장 (자동 임시 저장)
@@ -248,7 +251,8 @@ equipments = st.multiselect("설비 목록", ["STACKER CRANE", "CONVEYOR", "RGV"
 st.divider()
 col_m1, col_m2 = st.columns([8, 2])
 with col_m1:
-    st.markdown(f"**{task_type} 상세 내용 (2번부터 자동 넘버링 및 색상 분류)**")
+    start_no = "2번" if task_type == "점검" else "1번"
+    st.markdown(f"**{task_type} 상세 내용 ({start_no}부터 자동 넘버링 및 색상 분류)**")
 with col_m2:
     if st.button("🗑️ 메모 초기화"):
         st.session_state.contents = ""
@@ -261,19 +265,20 @@ if "contents" not in st.session_state:
 def update_draft():
     save_draft(st.session_state.contents)
 
-contents = st.text_area("S/C, CV, RGV, LIFT 키워드가 포함되면 설비별로 자동 분류됩니다.", height=130, key="contents", on_change=update_draft)
+placeholder_msg = "S/C, CV, RGV, LIFT 키워드가 포함되면 설비별로 자동 분류됩니다." if task_type == "점검" else "공사 작업 내역을 한 줄씩 입력하세요."
+contents = st.text_area(placeholder_msg, height=130, key="contents", on_change=update_draft)
 
 # ==========================================
-# 4. 현장 사진 대장 (S/C 부위별 표준 입력창 - 중복 Key 에러 완전 해결)
+# 4. 현장 사진 대장
 # ==========================================
 st.divider()
 st.markdown(f"### 📷 {task_type} 사진 대장")
 
 photo_upload_data = []
 
-if "STACKER CRANE" in equipments:
+# 점검이고 STACKER CRANE이 포함되어 있을 때만 부위별 탭 출력
+if task_type == "점검" and "STACKER CRANE" in equipments:
     st.info("💡 STACKER CRANE 부위별 표준 점검 항목입니다. 사진 업로드 시 해당 항목 텍스트와 함께 엑셀에 들어갑니다.")
-    
     tabs = st.tabs(list(SC_PARTS_CONFIG.keys()))
     
     for t_idx, (part_name, default_items) in enumerate(SC_PARTS_CONFIG.items()):
@@ -307,6 +312,8 @@ if "STACKER CRANE" in equipments:
                                         pass
                         photo_upload_data.append((photos, custom_desc))
 else:
+    # 공사 모드이거나 S/C가 아닌 점검 모드일 때는 자유 칸 등록
+    st.caption(f"{task_type} 전/후 사진과 설명을 등록하세요 (1칸당 최대 2장).")
     if "custom_blocks" not in st.session_state:
         st.session_state.custom_blocks = 4
         
@@ -319,14 +326,24 @@ else:
                     with st.container(border=True):
                         st.markdown(f"**[{cur_idx+1}번 칸]**")
                         photos = st.file_uploader(f"사진 등록", type=['png', 'jpg', 'jpeg'], accept_multiple_files=True, key=f"cust_p_{cur_idx}")
-                        desc = st.text_input(f"설명", key=f"cust_d_{cur_idx}", placeholder="사진 설명을 입력하세요")
+                        if photos:
+                            preview_cols = st.columns(2)
+                            for prv_i, prv_f in enumerate(photos[:2]):
+                                with preview_cols[prv_i]:
+                                    try:
+                                        im = PILImage.open(prv_f)
+                                        st.image(im, use_container_width=True)
+                                        prv_f.seek(0)
+                                    except:
+                                        pass
+                        desc = st.text_input(f"{task_type} 설명", key=f"cust_d_{cur_idx}", placeholder=f"{task_type} 작업 내용 입력")
                         photo_upload_data.append((photos, desc))
                         
     if st.button("➕ 사진 칸 2개 추가"):
         st.session_state.custom_blocks += 2
         st.rerun()
 
-# --- 병합 셀 안전 처리 함수 ---
+# --- 엑셀 처리 함수 ---
 def get_safe_cell(ws, row, col):
     cell = ws.cell(row=row, column=col)
     if type(cell).__name__ == 'MergedCell':
@@ -419,7 +436,7 @@ st.divider()
 if st.button(f"🚀 {task_type}보고서 및 사진대장 생성하기", use_container_width=True):
     if not site_name or not date_str or not author or not manager:
         st.warning("작성자, 담당 PM, 현장명, 작업 일자를 확인해주세요.")
-    elif not equipments:
+    elif task_type == "점검" and not equipments:
         st.warning("점검 진행 설비를 최소 1개 이상 선택해주세요.")
     else:
         with st.spinner("엑셀 보고서를 생성 중입니다..."):
@@ -428,7 +445,7 @@ if st.button(f"🚀 {task_type}보고서 및 사진대장 생성하기", use_con
                     "vendor": site_db.get(site_name, {}).get("vendor", "MXRobotics"),
                     "address": address,
                     "pm": manager,
-                    "equipments": equipments
+                    "equipments": equipments if task_type == "점검" else site_db.get(site_name, {}).get("equipments", ["STACKER CRANE"])
                 }
                 save_memory(site_db)
 
@@ -454,33 +471,51 @@ if st.button(f"🚀 {task_type}보고서 및 사진대장 생성하기", use_con
                     cell.font = Font(name='굴림체', size=sz, color="000000")
 
                 copied_pages = {0}
-
                 raw_lines = [l.strip() for l in contents.split('\n') if l.strip()]
                 sorted_lines = sorted(raw_lines, key=sort_rules)
 
-                sc_lines, cv_lines, rgv_lines, lift_lines = [], [], [], []
-                for line in sorted_lines:
-                    u_line = line.upper()
-                    if "RGV" in u_line:
-                        rgv_lines.append(line)
-                    elif "LIFT" in u_line or "리프트" in u_line:
-                        lift_lines.append(line)
-                    elif "CV" in u_line or "CONVEYOR" in u_line or "컨베이어" in u_line:
-                        cv_lines.append(line)
-                    elif "S/C" in u_line or "STC" in u_line or "크레인" in u_line or "호기" in u_line:
-                        sc_lines.append(line)
-                    else:
-                        sc_lines.append(line)
-
                 current_row = 12
-                if "STACKER CRANE" in equipments:
-                    current_row = write_equipment_block(ws_report, DEFAULT_TEXTS["STACKER CRANE"], sc_lines, current_row, copied_pages)
-                if "CONVEYOR" in equipments:
-                    current_row = write_equipment_block(ws_report, DEFAULT_TEXTS["CONVEYOR"], cv_lines, current_row, copied_pages)
-                if "RGV" in equipments:
-                    current_row = write_equipment_block(ws_report, DEFAULT_TEXTS["RGV"], rgv_lines, current_row, copied_pages)
-                if "LIFT" in equipments:
-                    current_row = write_equipment_block(ws_report, DEFAULT_TEXTS["LIFT"], lift_lines, current_row, copied_pages)
+
+                if task_type == "공사":
+                    # 공사는 설비 구분 없이 1번부터 바로 순차 기입
+                    for idx, line in enumerate(sorted_lines):
+                        current_page = (current_row - 1) // 38
+                        data_end_row = current_page * 38 + 38
+                        if current_row > data_end_row:
+                            current_page += 1
+                            ensure_page_exists(ws_report, current_page, copied_pages)
+                            current_row = current_page * 38 + 12
+
+                        cell = get_safe_cell(ws_report, current_row, 2)
+                        cell.value = f"{idx + 1}. {line}"
+                        sz = cell.font.size if cell.font and cell.font.size else 11
+                        cell.font = Font(name='굴림체', size=sz, bold=False, color="000000")
+                        cell.alignment = Alignment(horizontal='left', vertical='center')
+                        current_row += 1
+                else:
+                    # 점검 모드: 설비별로 분류 및 공통항목 작성
+                    sc_lines, cv_lines, rgv_lines, lift_lines = [], [], [], []
+                    for line in sorted_lines:
+                        u_line = line.upper()
+                        if "RGV" in u_line:
+                            rgv_lines.append(line)
+                        elif "LIFT" in u_line or "리프트" in u_line:
+                            lift_lines.append(line)
+                        elif "CV" in u_line or "CONVEYOR" in u_line or "컨베이어" in u_line:
+                            cv_lines.append(line)
+                        elif "S/C" in u_line or "STC" in u_line or "크레인" in u_line or "호기" in u_line:
+                            sc_lines.append(line)
+                        else:
+                            sc_lines.append(line)
+
+                    if "STACKER CRANE" in equipments:
+                        current_row = write_equipment_block(ws_report, DEFAULT_TEXTS["STACKER CRANE"], sc_lines, current_row, copied_pages)
+                    if "CONVEYOR" in equipments:
+                        current_row = write_equipment_block(ws_report, DEFAULT_TEXTS["CONVEYOR"], cv_lines, current_row, copied_pages)
+                    if "RGV" in equipments:
+                        current_row = write_equipment_block(ws_report, DEFAULT_TEXTS["RGV"], rgv_lines, current_row, copied_pages)
+                    if "LIFT" in equipments:
+                        current_row = write_equipment_block(ws_report, DEFAULT_TEXTS["LIFT"], lift_lines, current_row, copied_pages)
 
                 output_report = io.BytesIO()
                 wb_report.save(output_report)
@@ -499,7 +534,6 @@ if st.button(f"🚀 {task_type}보고서 및 사진대장 생성하기", use_con
 
                     PHOTO_PAGE_ROWS = 85
 
-                    # 기존 더미 텍스트 초기화
                     for p_i in range(10):
                         p_offset = p_i * PHOTO_PAGE_ROWS
                         for b in range(4):
