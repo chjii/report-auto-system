@@ -13,7 +13,7 @@ st.set_page_config(page_title="자동창고 보고서 생성기", layout="wide")
 st.title("📝 현장 보고서 자동 생성기")
 
 # ==========================================
-# 0. 55개 고객사 마스터 DB 및 설정값
+# 0. 55개 고객사 마스터 DB 및 기본 설정
 # ==========================================
 BASE_SITE_DB = {
     "아이티센엔텍": {"vendor": "블루원", "address": "강원도 인제군", "equipments": ["STACKER CRANE", "CONVEYOR"], "pm": "김은호 수석"},
@@ -74,36 +74,11 @@ BASE_SITE_DB = {
 }
 
 SC_PARTS_CONFIG = {
-    "CARRIAGE부": [
-        "1) FORK C.F BEARING CLEANING",
-        "2) FORK C.F BEARING GREASE 도포",
-        "3) FORK CHAIN TENSION 확인",
-        ""
-    ],
-    "주행부": [
-        "1) 주행 WHEEL 상태 확인",
-        "2) 주행 GUIDE ROLLER 상태 확인",
-        "3) 주행 MOTOR BRAKE GAP 확인",
-        ""
-    ],
-    "승강부": [
-        "1) 외측 GUIDE ROLLER 상태 확인",
-        "2) 내측 GUIDE ROLLER 상태 확인",
-        "3) 승강 MOTOR BRAKE GAP 확인",
-        ""
-    ],
-    "상부부": [
-        "1) 상부 GUIDE ROLLER 상태 확인",
-        "2) 상부 BRAKE ROLLER 상태 확인",
-        "",
-        ""
-    ],
-    "집전부": [
-        "1) 집전기 ROLLER 및 SHOE 상태 확인",
-        "2) 집전기 CLEANING",
-        "3) 기상반 PANEL 단자대 REBOLTING",
-        "4) 각 SENSOR 단자대 REBOLTING"
-    ]
+    "CARRIAGE부": ["1) FORK C.F BEARING CLEANING", "2) FORK C.F BEARING GREASE 도포", "3) FORK CHAIN TENSION 확인", ""],
+    "주행부": ["1) 주행 WHEEL 상태 확인", "2) 주행 GUIDE ROLLER 상태 확인", "3) 주행 MOTOR BRAKE GAP 확인", ""],
+    "승강부": ["1) 외측 GUIDE ROLLER 상태 확인", "2) 내측 GUIDE ROLLER 상태 확인", "3) 승강 MOTOR BRAKE GAP 확인", ""],
+    "상부부": ["1) 상부 GUIDE ROLLER 상태 확인", "2) 상부 BRAKE ROLLER 상태 확인", "", ""],
+    "집전부": ["1) 집전기 ROLLER 및 SHOE 상태 확인", "2) 집전기 CLEANING", "3) 기상반 PANEL 단자대 REBOLTING", "4) 각 SENSOR 단자대 REBOLTING"]
 }
 
 DEFAULT_TEXTS = {
@@ -239,111 +214,160 @@ if len(date_range) == 2:
 
 workers = st.text_input("작업자명 및 인원", placeholder="예: 최진명 차장 외 6명")
 
-# 점검일 때만 설비 선택창 출력
+# 점검 모드일 때만 설비 선택창 출력
 equipments = []
 if task_type == "점검":
     st.markdown("#### ⚙️ 점검 대상 설비")
     equipments = st.multiselect("설비 목록", ["STACKER CRANE", "CONVEYOR", "RGV", "LIFT"], key="equip_val")
 
 # ==========================================
-# 3. 작업 내용 메모장 (자동 임시 저장)
+# 3. 작업 내용 메모장 (점검일 때만 출력)
 # ==========================================
-st.divider()
-col_m1, col_m2 = st.columns([8, 2])
-with col_m1:
-    start_no = "2번" if task_type == "점검" else "1번"
-    st.markdown(f"**{task_type} 상세 내용 ({start_no}부터 자동 넘버링 및 색상 분류)**")
-with col_m2:
-    if st.button("🗑️ 메모 초기화"):
-        st.session_state.contents = ""
-        save_draft("")
-        st.rerun()
+if task_type == "점검":
+    st.divider()
+    col_m1, col_m2 = st.columns([8, 2])
+    with col_m1:
+        st.markdown(f"**점검 상세 내용 (2번부터 자동 넘버링 및 색상 분류)**")
+    with col_m2:
+        if st.button("🗑️ 메모 초기화"):
+            st.session_state.contents = ""
+            save_draft("")
+            st.rerun()
 
-if "contents" not in st.session_state:
-    st.session_state.contents = load_draft().get("contents", "")
+    if "contents" not in st.session_state:
+        st.session_state.contents = load_draft().get("contents", "")
 
-def update_draft():
-    save_draft(st.session_state.contents)
+    def update_draft():
+        save_draft(st.session_state.contents)
 
-placeholder_msg = "S/C, CV, RGV, LIFT 키워드가 포함되면 설비별로 자동 분류됩니다." if task_type == "점검" else "공사 작업 내역을 한 줄씩 입력하세요."
-contents = st.text_area(placeholder_msg, height=130, key="contents", on_change=update_draft)
+    contents = st.text_area("S/C, CV, RGV, LIFT 키워드가 포함되면 설비별로 자동 분류됩니다.", height=130, key="contents", on_change=update_draft)
+else:
+    contents = ""
 
 # ==========================================
-# 4. 현장 사진 대장
+# 4. 현장 사진 대장 (공사 / 점검)
 # ==========================================
 st.divider()
 st.markdown(f"### 📷 {task_type} 사진 대장")
 
 photo_upload_data = []
 
-# 점검이고 STACKER CRANE이 포함되어 있을 때만 부위별 탭 출력
-if task_type == "점검" and "STACKER CRANE" in equipments:
-    st.info("💡 STACKER CRANE 부위별 표준 점검 항목입니다. 사진 업로드 시 해당 항목 텍스트와 함께 엑셀에 들어갑니다.")
-    tabs = st.tabs(list(SC_PARTS_CONFIG.keys()))
+if task_type == "공사":
+    st.caption("각 번호별 [공사작업 내역]과 좌/우 작업사진 및 사진별 설명을 입력하세요. 입력하신 개수만큼만 엑셀에 작성되고 아래 빈 칸은 모두 삭제됩니다.")
     
-    for t_idx, (part_name, default_items) in enumerate(SC_PARTS_CONFIG.items()):
-        with tabs[t_idx]:
-            p_cols = st.columns(2)
-            for item_idx, def_val in enumerate(default_items):
-                target_col = p_cols[item_idx % 2]
-                with target_col:
-                    with st.container(border=True):
-                        custom_desc = st.text_input(
-                            f"항목명 #{item_idx+1}", 
-                            value=def_val, 
-                            key=f"sc_desc_{t_idx}_{item_idx}", 
-                            placeholder="점검 내용 직접 입력"
-                        )
-                        photos = st.file_uploader(
-                            f"사진 등록 (최대 2장)", 
-                            type=['png', 'jpg', 'jpeg'], 
-                            accept_multiple_files=True, 
-                            key=f"sc_photo_{t_idx}_{item_idx}"
-                        )
-                        if photos:
-                            preview_cols = st.columns(2)
-                            for prv_i, prv_f in enumerate(photos[:2]):
-                                with preview_cols[prv_i]:
-                                    try:
-                                        im = PILImage.open(prv_f)
-                                        st.image(im, use_container_width=True)
-                                        prv_f.seek(0)
-                                    except:
-                                        pass
-                        photo_upload_data.append((photos, custom_desc))
-else:
-    # 공사 모드이거나 S/C가 아닌 점검 모드일 때는 자유 칸 등록
-    st.caption(f"{task_type} 전/후 사진과 설명을 등록하세요 (1칸당 최대 2장).")
-    if "custom_blocks" not in st.session_state:
-        st.session_state.custom_blocks = 4
-        
-    for b_idx in range(0, st.session_state.custom_blocks, 2):
-        c_cols = st.columns(2)
-        for sub_c in range(2):
-            cur_idx = b_idx + sub_c
-            if cur_idx < st.session_state.custom_blocks:
-                with c_cols[sub_c]:
-                    with st.container(border=True):
-                        st.markdown(f"**[{cur_idx+1}번 칸]**")
-                        photos = st.file_uploader(f"사진 등록", type=['png', 'jpg', 'jpeg'], accept_multiple_files=True, key=f"cust_p_{cur_idx}")
-                        if photos:
-                            preview_cols = st.columns(2)
-                            for prv_i, prv_f in enumerate(photos[:2]):
-                                with preview_cols[prv_i]:
-                                    try:
-                                        im = PILImage.open(prv_f)
-                                        st.image(im, use_container_width=True)
-                                        prv_f.seek(0)
-                                    except:
-                                        pass
-                        desc = st.text_input(f"{task_type} 설명", key=f"cust_d_{cur_idx}", placeholder=f"{task_type} 작업 내용 입력")
-                        photo_upload_data.append((photos, desc))
-                        
-    if st.button("➕ 사진 칸 2개 추가"):
-        st.session_state.custom_blocks += 2
-        st.rerun()
+    if "const_items_count" not in st.session_state:
+        st.session_state.const_items_count = 2
 
-# --- 엑셀 처리 함수 ---
+    for c_idx in range(st.session_state.const_items_count):
+        with st.container(border=True):
+            st.markdown(f"#### 🔨 NO {c_idx + 1}")
+            task_title = st.text_input(
+                f"공사작업 내역 #{c_idx + 1}", 
+                placeholder="예: 공사 자재 확인, 기존 DOORLOCK 철거, 센서 브라켓 설치 등",
+                key=f"const_title_{c_idx}"
+            )
+            
+            p_col1, p_col2 = st.columns(2)
+            with p_col1:
+                st.markdown("**[좌측 사진 (작업 전)]**")
+                p_left = st.file_uploader(f"좌측 사진 등록", type=['png', 'jpg', 'jpeg'], key=f"c_img_l_{c_idx}")
+                if p_left:
+                    try:
+                        im_l = PILImage.open(p_left)
+                        st.image(im_l, use_container_width=True)
+                        p_left.seek(0)
+                    except:
+                        pass
+                d_left = st.text_input(f"좌측 사진 설명", placeholder="예: 작업 전 상태 확인", key=f"c_desc_l_{c_idx}")
+
+            with p_col2:
+                st.markdown("**[우측 사진 (작업 후)]**")
+                p_right = st.file_uploader(f"우측 사진 등록", type=['png', 'jpg', 'jpeg'], key=f"c_img_r_{c_idx}")
+                if p_right:
+                    try:
+                        im_r = PILImage.open(p_right)
+                        st.image(im_r, use_container_width=True)
+                        p_right.seek(0)
+                    except:
+                        pass
+                d_right = st.text_input(f"우측 사진 설명", placeholder="예: 작업 완료 후 상태", key=f"c_desc_r_{c_idx}")
+
+            photo_upload_data.append({
+                "no": c_idx + 1,
+                "title": task_title,
+                "p_left": p_left,
+                "d_left": d_left,
+                "p_right": p_right,
+                "d_right": d_right
+            })
+
+    col_btn1, col_btn2 = st.columns([2, 8])
+    with col_btn1:
+        if st.button("➕ 공사 작업 항목 추가 (NO 추가)"):
+            st.session_state.const_items_count += 1
+            st.rerun()
+    with col_btn2:
+        if st.session_state.const_items_count > 1:
+            if st.button("➖ 마지막 항목 제거"):
+                st.session_state.const_items_count -= 1
+                st.rerun()
+
+else:
+    # 점검 모드: STACKER CRANE 부위별 표준 탭
+    if "STACKER CRANE" in equipments:
+        st.info("💡 STACKER CRANE 부위별 표준 점검 항목입니다. 사진 업로드 시 해당 항목 텍스트와 함께 엑셀에 들어갑니다.")
+        tabs = st.tabs(list(SC_PARTS_CONFIG.keys()))
+        for t_idx, (part_name, default_items) in enumerate(SC_PARTS_CONFIG.items()):
+            with tabs[t_idx]:
+                p_cols = st.columns(2)
+                for item_idx, def_val in enumerate(default_items):
+                    target_col = p_cols[item_idx % 2]
+                    with target_col:
+                        with st.container(border=True):
+                            custom_desc = st.text_input(
+                                f"항목명 #{item_idx+1}", 
+                                value=def_val, 
+                                key=f"sc_desc_{t_idx}_{item_idx}", 
+                                placeholder="점검 내용 직접 입력"
+                            )
+                            photos = st.file_uploader(
+                                f"사진 등록 (최대 2장)", 
+                                type=['png', 'jpg', 'jpeg'], 
+                                accept_multiple_files=True, 
+                                key=f"sc_photo_{t_idx}_{item_idx}"
+                            )
+                            if photos:
+                                preview_cols = st.columns(2)
+                                for prv_i, prv_f in enumerate(photos[:2]):
+                                    with preview_cols[prv_i]:
+                                        try:
+                                            im = PILImage.open(prv_f)
+                                            st.image(im, use_container_width=True)
+                                            prv_f.seek(0)
+                                        except:
+                                            pass
+                            photo_upload_data.append({"photos": photos, "desc": custom_desc})
+    else:
+        st.caption("점검 전/후 사진과 설명을 등록하세요.")
+        if "custom_blocks" not in st.session_state:
+            st.session_state.custom_blocks = 4
+            
+        for b_idx in range(0, st.session_state.custom_blocks, 2):
+            c_cols = st.columns(2)
+            for sub_c in range(2):
+                cur_idx = b_idx + sub_c
+                if cur_idx < st.session_state.custom_blocks:
+                    with c_cols[sub_c]:
+                        with st.container(border=True):
+                            st.markdown(f"**[{cur_idx+1}번 칸]**")
+                            photos = st.file_uploader(f"사진 등록", type=['png', 'jpg', 'jpeg'], accept_multiple_files=True, key=f"cust_p_{cur_idx}")
+                            desc = st.text_input(f"설명", key=f"cust_d_{cur_idx}", placeholder="사진 설명 입력")
+                            photo_upload_data.append({"photos": photos, "desc": desc})
+        if st.button("➕ 사진 칸 2개 추가"):
+            st.session_state.custom_blocks += 2
+            st.rerun()
+
+# --- 엑셀 안전 처리 함수 ---
 def get_safe_cell(ws, row, col):
     cell = ws.cell(row=row, column=col)
     if type(cell).__name__ == 'MergedCell':
@@ -430,16 +454,18 @@ def write_equipment_block(ws, defaults, user_lines, row_idx, copied_pages):
     return row_idx
 
 # ==========================================
-# 5. 생성 및 다운로드
+# 5. 생성 및 다운로드 실행
 # ==========================================
 st.divider()
-if st.button(f"🚀 {task_type}보고서 및 사진대장 생성하기", use_container_width=True):
+btn_label = f"🚀 [공사 사진대장] 생성하기" if task_type == "공사" else f"🚀 [점검 보고서 & 사진대장] 생성하기"
+
+if st.button(btn_label, use_container_width=True):
     if not site_name or not date_str or not author or not manager:
         st.warning("작성자, 담당 PM, 현장명, 작업 일자를 확인해주세요.")
     elif task_type == "점검" and not equipments:
         st.warning("점검 진행 설비를 최소 1개 이상 선택해주세요.")
     else:
-        with st.spinner("엑셀 보고서를 생성 중입니다..."):
+        with st.spinner("엑셀 파일을 생성 중입니다..."):
             try:
                 site_db[site_name] = {
                     "vendor": site_db.get(site_name, {}).get("vendor", "MXRobotics"),
@@ -449,65 +475,45 @@ if st.button(f"🚀 {task_type}보고서 및 사진대장 생성하기", use_con
                 }
                 save_memory(site_db)
 
-                template_filename = f"template_mxr_{task_type}.xlsx"
-                if not os.path.exists(template_filename):
-                    template_filename = 'template_mxr_점검.xlsx'
+                output_report = None
+                output_photo = None
 
-                wb_report = openpyxl.load_workbook(template_filename)
-                ws_report = wb_report.active
+                # --------------------------------------------------
+                # A. 점검 보고서 생성 (점검 모드일 때만 실행)
+                # --------------------------------------------------
+                if task_type == "점검":
+                    template_filename = f"template_mxr_점검.xlsx"
+                    wb_report = openpyxl.load_workbook(template_filename)
+                    ws_report = wb_report.active
 
-                get_safe_cell(ws_report, 5, 3).value = site_name
-                get_safe_cell(ws_report, 6, 3).value = address
-                get_safe_cell(ws_report, 9, 3).value = f"{site_name} 정기 {task_type}"
-                get_safe_cell(ws_report, 10, 3).value = date_str
-                get_safe_cell(ws_report, 10, 9).value = workers
-                get_safe_cell(ws_report, 6, 8).value = author
-                get_safe_cell(ws_report, 8, 3).value = manager
+                    get_safe_cell(ws_report, 5, 3).value = site_name
+                    get_safe_cell(ws_report, 6, 3).value = address
+                    get_safe_cell(ws_report, 9, 3).value = f"{site_name} 정기 점검"
+                    get_safe_cell(ws_report, 10, 3).value = date_str
+                    get_safe_cell(ws_report, 10, 9).value = workers
+                    get_safe_cell(ws_report, 6, 8).value = author
+                    get_safe_cell(ws_report, 8, 3).value = manager
 
-                for r in range(12, 39):
-                    cell = get_safe_cell(ws_report, r, 2)
-                    cell.value = None
-                    sz = cell.font.size if cell.font and cell.font.size else 11
-                    cell.font = Font(name='굴림체', size=sz, color="000000")
-
-                copied_pages = {0}
-                raw_lines = [l.strip() for l in contents.split('\n') if l.strip()]
-                sorted_lines = sorted(raw_lines, key=sort_rules)
-
-                current_row = 12
-
-                if task_type == "공사":
-                    # 공사는 설비 구분 없이 1번부터 바로 순차 기입
-                    for idx, line in enumerate(sorted_lines):
-                        current_page = (current_row - 1) // 38
-                        data_end_row = current_page * 38 + 38
-                        if current_row > data_end_row:
-                            current_page += 1
-                            ensure_page_exists(ws_report, current_page, copied_pages)
-                            current_row = current_page * 38 + 12
-
-                        cell = get_safe_cell(ws_report, current_row, 2)
-                        cell.value = f"{idx + 1}. {line}"
+                    for r in range(12, 39):
+                        cell = get_safe_cell(ws_report, r, 2)
+                        cell.value = None
                         sz = cell.font.size if cell.font and cell.font.size else 11
-                        cell.font = Font(name='굴림체', size=sz, bold=False, color="000000")
-                        cell.alignment = Alignment(horizontal='left', vertical='center')
-                        current_row += 1
-                else:
-                    # 점검 모드: 설비별로 분류 및 공통항목 작성
+                        cell.font = Font(name='굴림체', size=sz, color="000000")
+
+                    copied_pages = {0}
+                    raw_lines = [l.strip() for l in contents.split('\n') if l.strip()]
+                    sorted_lines = sorted(raw_lines, key=sort_rules)
+
                     sc_lines, cv_lines, rgv_lines, lift_lines = [], [], [], []
                     for line in sorted_lines:
                         u_line = line.upper()
-                        if "RGV" in u_line:
-                            rgv_lines.append(line)
-                        elif "LIFT" in u_line or "리프트" in u_line:
-                            lift_lines.append(line)
-                        elif "CV" in u_line or "CONVEYOR" in u_line or "컨베이어" in u_line:
-                            cv_lines.append(line)
-                        elif "S/C" in u_line or "STC" in u_line or "크레인" in u_line or "호기" in u_line:
-                            sc_lines.append(line)
-                        else:
-                            sc_lines.append(line)
+                        if "RGV" in u_line: rgv_lines.append(line)
+                        elif "LIFT" in u_line or "리프트" in u_line: lift_lines.append(line)
+                        elif "CV" in u_line or "CONVEYOR" in u_line or "컨베이어" in u_line: cv_lines.append(line)
+                        elif "S/C" in u_line or "STC" in u_line or "크레인" in u_line or "호기" in u_line: sc_lines.append(line)
+                        else: sc_lines.append(line)
 
+                    current_row = 12
                     if "STACKER CRANE" in equipments:
                         current_row = write_equipment_block(ws_report, DEFAULT_TEXTS["STACKER CRANE"], sc_lines, current_row, copied_pages)
                     if "CONVEYOR" in equipments:
@@ -517,85 +523,164 @@ if st.button(f"🚀 {task_type}보고서 및 사진대장 생성하기", use_con
                     if "LIFT" in equipments:
                         current_row = write_equipment_block(ws_report, DEFAULT_TEXTS["LIFT"], lift_lines, current_row, copied_pages)
 
-                output_report = io.BytesIO()
-                wb_report.save(output_report)
-                output_report.seek(0)
+                    output_report = io.BytesIO()
+                    wb_report.save(output_report)
+                    output_report.seek(0)
 
-                # 사진 대장 생성
-                output_photo = None
-                valid_photos = [(p, d) for p, d in photo_upload_data if (p and len(p) > 0) or (d and d.strip())]
-
-                if len(valid_photos) > 0 and os.path.exists('photo_template.xlsx'):
+                # --------------------------------------------------
+                # B. 사진 대장 생성 (공사/점검 정확한 좌표 매핑 및 빈 행 정리)
+                # --------------------------------------------------
+                if os.path.exists('photo_template.xlsx'):
                     wb_photo = openpyxl.load_workbook('photo_template.xlsx')
                     ws_photo = wb_photo.active
 
+                    # 기존 더미 이미지 완벽 제거
                     if hasattr(ws_photo, '_images'):
                         ws_photo._images.clear()
 
-                    PHOTO_PAGE_ROWS = 85
-
-                    for p_i in range(10):
-                        p_offset = p_i * PHOTO_PAGE_ROWS
-                        for b in range(4):
-                            desc_r = p_offset + 10 + (b * 19) + 16
-                            cell = get_safe_cell(ws_photo, desc_r, 2)
-                            cell.value = None
-
+                    # 헤더 정보 입력
                     get_safe_cell(ws_photo, 5, 2).value = f"{site_name} 자동화 창고 {task_type} 사진"
                     get_safe_cell(ws_photo, 10, 9).value = f"1. 현장명 : {site_name}"
                     get_safe_cell(ws_photo, 14, 9).value = f"3. 작업일자 : {date_str}"
                     get_safe_cell(ws_photo, 15, 9).value = f"4. 작업인원 : {workers}"
 
-                    for b_idx, (photos, desc) in enumerate(valid_photos):
-                        page_num = b_idx // 4
-                        pos_in_page = b_idx % 4
+                    if task_type == "공사":
+                        # 1개 블록 높이: 19행 (이미지 16행 + 설명 1행 + 간격 2행)
+                        # NO 1: 시작행 10, 설명행 26
+                        # NO 2: 시작행 29, 설명행 45
+                        # NO 3: 시작행 48, 설명행 64
+                        ITEM_HEIGHT = 19
+                        num_items = len(photo_upload_data)
 
-                        base_row = (page_num * PHOTO_PAGE_ROWS) + 10 + (pos_in_page * 19)
-                        desc_row = base_row + 16
+                        for idx, item in enumerate(photo_upload_data):
+                            base_r = 10 + (idx * ITEM_HEIGHT)
+                            desc_r = base_r + 16
 
-                        if desc:
-                            d_cell = get_safe_cell(ws_photo, desc_row, 2)
-                            d_cell.value = desc
-                            sz = d_cell.font.size if d_cell.font and d_cell.font.size else 10
-                            d_cell.font = Font(name='굴림체', size=sz, bold=True, color="000000")
-                            d_cell.alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
+                            # 1) NO 번호
+                            no_cell = get_safe_cell(ws_photo, base_r, 1)
+                            no_cell.value = str(item["no"])
+                            no_cell.font = Font(name='굴림체', size=11, bold=True)
+                            no_cell.alignment = Alignment(horizontal='center', vertical='center')
 
-                        if photos:
-                            for img_i, p_file in enumerate(photos[:2]):
-                                p_file.seek(0)
-                                col = 'B' if img_i == 0 else 'D'
-                                img_pil = PILImage.open(p_file)
-                                img_pil.thumbnail((340, 270))
+                            # 2) 공사작업 내역 (두 번째 열)
+                            title_cell = get_safe_cell(ws_photo, base_r, 2)
+                            title_cell.value = item["title"]
+                            title_cell.font = Font(name='굴림체', size=10, bold=True)
+                            title_cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
 
-                                img_byte_arr = io.BytesIO()
-                                img_pil.save(img_byte_arr, format='PNG')
-                                img_byte_arr.seek(0)
-                                xl_img = Image(img_byte_arr)
-                                ws_photo.add_image(xl_img, f"{col}{base_row}")
+                            # 3) 좌측 사진 및 설명
+                            d_left_cell = get_safe_cell(ws_photo, desc_r, 2)
+                            d_left_cell.value = item["d_left"]
+                            d_left_cell.font = Font(name='굴림체', size=9)
+                            d_left_cell.alignment = Alignment(horizontal='center', vertical='center')
+
+                            if item["p_left"]:
+                                item["p_left"].seek(0)
+                                im_l = PILImage.open(item["p_left"])
+                                im_l.thumbnail((260, 230))
+                                b_arr_l = io.BytesIO()
+                                im_l.save(b_arr_l, format='PNG')
+                                b_arr_l.seek(0)
+                                xl_img_l = Image(b_arr_l)
+                                ws_photo.add_image(xl_img_l, f"C{base_r}")
+
+                            # 4) 우측 사진 및 설명
+                            d_right_cell = get_safe_cell(ws_photo, desc_r, 4)
+                            d_right_cell.value = item["d_right"]
+                            d_right_cell.font = Font(name='굴림체', size=9)
+                            d_right_cell.alignment = Alignment(horizontal='center', vertical='center')
+
+                            if item["p_right"]:
+                                item["p_right"].seek(0)
+                                im_r = PILImage.open(item["p_right"])
+                                im_r.thumbnail((260, 230))
+                                b_arr_r = io.BytesIO()
+                                im_r.save(b_arr_r, format='PNG')
+                                b_arr_r.seek(0)
+                                xl_img_r = Image(b_arr_r)
+                                ws_photo.add_image(xl_img_r, f"D{base_r}")
+
+                        # [핵심] 입력된 개수 아래의 불필요한 템플릿 더미 행은 깨끗이 삭제/초기화!
+                        last_used_row = 10 + (num_items * ITEM_HEIGHT)
+                        max_clean_row = max(ws_photo.max_row, last_used_row + 100)
+                        
+                        # 템플릿의 잔여 텍스트 및 병합 범위 초기화
+                        for r_del in range(last_used_row, max_clean_row + 1):
+                            for c_del in range(1, ws_photo.max_column + 1):
+                                cell = ws_photo.cell(row=r_del, column=c_del)
+                                if type(cell).__name__ != 'MergedCell':
+                                    cell.value = None
+
+                    else:
+                        # 점검 모드: 기존 2x2 사진대장 기입
+                        PHOTO_PAGE_ROWS = 85
+                        for p_i in range(5):
+                            p_offset = p_i * PHOTO_PAGE_ROWS
+                            for b in range(4):
+                                desc_r = p_offset + 10 + (b * 19) + 16
+                                cell = get_safe_cell(ws_photo, desc_r, 2)
+                                cell.value = None
+
+                        valid_photos = [x for x in photo_upload_data if (x.get("photos") and len(x["photos"]) > 0) or (x.get("desc") and x["desc"].strip())]
+
+                        for b_idx, item in enumerate(valid_photos):
+                            page_num = b_idx // 4
+                            pos_in_page = b_idx % 4
+                            base_row = (page_num * PHOTO_PAGE_ROWS) + 10 + (pos_in_page * 19)
+                            desc_row = base_row + 16
+
+                            if item.get("desc"):
+                                d_cell = get_safe_cell(ws_photo, desc_row, 2)
+                                d_cell.value = item["desc"]
+                                d_cell.font = Font(name='굴림체', size=10, bold=True)
+                                d_cell.alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
+
+                            if item.get("photos"):
+                                for img_i, p_file in enumerate(item["photos"][:2]):
+                                    p_file.seek(0)
+                                    col = 'B' if img_i == 0 else 'D'
+                                    img_pil = PILImage.open(p_file)
+                                    img_pil.thumbnail((340, 270))
+                                    b_arr = io.BytesIO()
+                                    img_pil.save(b_arr, format='PNG')
+                                    b_arr.seek(0)
+                                    xl_img = Image(b_arr)
+                                    ws_photo.add_image(xl_img, f"{col}{base_row}")
 
                     output_photo = io.BytesIO()
                     wb_photo.save(output_photo)
                     output_photo.seek(0)
 
-                st.success(f"🎉 {task_type}보고서 및 사진대장 작성이 완료되었습니다!")
-                c1, c2 = st.columns(2)
-                with c1:
+                st.success(f"🎉 작성이 완료되었습니다!")
+
+                # 공사 모드일 때는 사진 대장 다운로드만 출력
+                if task_type == "공사":
                     st.download_button(
-                        label=f"📥 [MXR_{task_type}보고서] 다운로드",
-                        data=output_report,
-                        file_name=f"(MXR_{task_type}보고서){site_name}_{date_str[:8].replace('. ', '')}.xlsx",
+                        label=f"🖼️ [MXR_공사사진대장] 다운로드",
+                        data=output_photo,
+                        file_name=f"(MXR_공사사진대장){site_name}_{date_str[:8].replace('. ', '')}.xlsx",
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                         use_container_width=True
                     )
-                if output_photo:
-                    with c2:
+                else:
+                    c1, c2 = st.columns(2)
+                    with c1:
                         st.download_button(
-                            label=f"🖼️ [MXR_{task_type}사진대장] 다운로드",
-                            data=output_photo,
-                            file_name=f"(MXR_{task_type}사진대장){site_name}_{date_str[:8].replace('. ', '')}.xlsx",
+                            label=f"📥 [MXR_점검보고서] 다운로드",
+                            data=output_report,
+                            file_name=f"(MXR_점검보고서){site_name}_{date_str[:8].replace('. ', '')}.xlsx",
                             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                             use_container_width=True
                         )
+                    if output_photo:
+                        with c2:
+                            st.download_button(
+                                label=f"🖼️ [MXR_점검사진대장] 다운로드",
+                                data=output_photo,
+                                file_name=f"(MXR_점검사진대장){site_name}_{date_str[:8].replace('. ', '')}.xlsx",
+                                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                use_container_width=True
+                            )
 
             except Exception as e:
                 st.error(f"오류가 발생했습니다: {e}")
