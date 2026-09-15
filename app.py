@@ -18,12 +18,61 @@ st.title("📝 현장 보고서 자동 생성기")
 # 0. 마스터 DB 및 기본 설정
 # ==========================================
 BASE_SITE_DB = {
-    "태준제약": {"vendor": "MXRobotics", "address": "경기도 용인시", "equipments": ["STACKER CRANE", "CONVEYOR", "RGV"], "pm": "남재준"},
-    "한미약품 팔탄공장 PMS": {"vendor": "MXRobotics", "address": "경기도 화성시", "equipments": ["CONVEYOR", "RGV", "LIFT"], "pm": "김대호"},
-    "유한킴벌리 충주": {"vendor": "MXRobotics", "address": "충청북도 충주시", "equipments": ["STACKER CRANE", "CONVEYOR", "RGV"], "pm": "김주영 책임"},
-    "BGF 광주": {"vendor": "SFA서비스", "address": "경기도 광주시", "equipments": ["STACKER CRANE", "CONVEYOR"], "pm": "김선용"},
+    "아이티센엔텍": {"vendor": "블루원", "address": "강원도 인제군", "equipments": ["STACKER CRANE", "CONVEYOR"], "pm": "김은호 수석"},
+    "LGL(롯데글로벌로지스)": {"vendor": "블루원", "address": "인천광역시 영종구", "equipments": ["CONVEYOR"], "pm": "김은기"},
     "일성IS": {"vendor": "블루원", "address": "경기도 안산시", "equipments": ["STACKER CRANE", "CONVEYOR", "RGV"], "pm": "권욱태 부장"},
-    "아이티센엔텍": {"vendor": "블루원", "address": "강원도 인제군", "equipments": ["STACKER CRANE", "CONVEYOR"], "pm": "김은호 수석"}
+    "우진플라임": {"vendor": "블루원", "address": "충청북도 보은군", "equipments": ["STACKER CRANE", "CONVEYOR", "RGV"], "pm": "백기철 차장"},
+    "일화": {"vendor": "블루원", "address": "강원도 춘천시", "equipments": ["STACKER CRANE", "CONVEYOR", "RGV"], "pm": "김영욱 부장"},
+    "농심": {"vendor": "농심 엔지니어링", "address": "경기도 안양시", "equipments": ["STACKER CRANE", "CONVEYOR"], "pm": "김재빈"},
+    "아모레퍼시픽 물류": {"vendor": "SFA서비스", "address": "경기도 오산시", "equipments": ["STACKER CRANE", "CONVEYOR", "RGV"], "pm": "김선용 차장"},
+    "아모레퍼시픽 생산": {"vendor": "SFA서비스", "address": "경기도 오산시", "equipments": ["RGV"], "pm": "김선용"},
+    "BGF 광주": {"vendor": "SFA서비스", "address": "경기도 광주시", "equipments": ["STACKER CRANE", "CONVEYOR"], "pm": "김선용"},
+    "BGF 진천": {"vendor": "SFA서비스", "address": "충청북도 진천군", "equipments": ["STACKER CRANE"], "pm": "김선용"},
+    "SK하이닉스": {"vendor": "SFA서비스", "address": "경기도 이천시", "equipments": ["STACKER CRANE", "CONVEYOR"], "pm": "정용욱 차장"},
+    "이마트24": {"vendor": "SFA서비스", "address": "경기도 평택시", "equipments": ["STACKER CRANE"], "pm": "박영대 차장"},
+    "한국오츠카 A": {"vendor": "SFA서비스", "address": "경기도 화성시", "equipments": ["STACKER CRANE", "CONVEYOR", "RGV"], "pm": "윤정현 과장"},
+    "한국오츠카 B": {"vendor": "SFA서비스", "address": "경기도 화성시", "equipments": ["STACKER CRANE", "CONVEYOR", "RGV"], "pm": "윤정현"},
+    "동아ST": {"vendor": "SFA서비스", "address": "인천광역시 연수구", "equipments": ["STACKER CRANE", "CONVEYOR", "RGV"], "pm": "박영대"},
+    "포스코퓨처엠": {"vendor": "SFA서비스", "address": "충청북도 세종시", "equipments": ["STACKER CRANE", "CONVEYOR", "RGV"], "pm": "정용욱"},
+    "BGF 진천(외자)": {"vendor": "DLS", "address": "충청북도 진천군", "equipments": ["RGV"], "pm": "허민재 수석"},
+    "다이소(외자)": {"vendor": "DLS", "address": "부산광역시 강서구", "equipments": ["RGV"], "pm": "이창준 수석"},
+    "아모레퍼시픽(외자)": {"vendor": "DLS", "address": "경기도 오산시", "equipments": ["RGV"], "pm": "허민재 수석"},
+    "한미약품 팔탄공장 WMS 1": {"vendor": "MXRobotics", "address": "경기도 화성시", "equipments": ["STACKER CRANE"], "pm": "김대호 선임"},
+    "한미약품 팔탄공장 WMS 2": {"vendor": "MXRobotics", "address": "경기도 화성시", "equipments": ["CONVEYOR"], "pm": "김대호"},
+    "한미약품 팔탄공장 PMS": {"vendor": "MXRobotics", "address": "경기도 화성시", "equipments": ["CONVEYOR", "RGV", "LIFT"], "pm": "김대호"},
+    "한미약품 팔탄공장 APS": {"vendor": "MXRobotics", "address": "경기도 화성시", "equipments": ["CONVEYOR"], "pm": "김대호"},
+    "한미약품 평택공장 바이오": {"vendor": "MXRobotics", "address": "경기도 평택시", "equipments": ["STACKER CRANE", "CONVEYOR", "RGV"], "pm": "남재준"},
+    "한미약품 평택공장 고형제": {"vendor": "MXRobotics", "address": "경기도 평택시", "equipments": ["STACKER CRANE", "CONVEYOR"], "pm": "남재준 선임"},
+    "녹십자(구)": {"vendor": "MXRobotics", "address": "충청북도 청주시 청원구", "equipments": ["STACKER CRANE", "CONVEYOR", "RGV"], "pm": "남재준"},
+    "녹십자(혈장)": {"vendor": "MXRobotics", "address": "충청북도 청주시 청원구", "equipments": ["STACKER CRANE", "CONVEYOR", "RGV"], "pm": "남재준"},
+    "명문제약": {"vendor": "MXRobotics", "address": "경기도 화성시", "equipments": ["STACKER CRANE", "CONVEYOR", "RGV"], "pm": "남재준"},
+    "태준제약": {"vendor": "MXRobotics", "address": "경기도 용인시", "equipments": ["STACKER CRANE", "CONVEYOR", "RGV"], "pm": "남재준"},
+    "동국제약": {"vendor": "MXRobotics", "address": "충청북도 진천군", "equipments": ["STACKER CRANE", "CONVEYOR", "RGV"], "pm": "남재준"},
+    "대원제약": {"vendor": "MXRobotics", "address": "충청북도 진천군", "equipments": ["STACKER CRANE", "CONVEYOR"], "pm": "남재준"},
+    "제일약품": {"vendor": "MXRobotics", "address": "경기도 용인시", "equipments": ["STACKER CRANE", "CONVEYOR", "RGV"], "pm": "남재준"},
+    "다이소 남사": {"vendor": "MXRobotics", "address": "경기도 용인시", "equipments": ["STACKER CRANE", "CONVEYOR", "RGV"], "pm": "남재준"},
+    "삼양사 아산": {"vendor": "MXRobotics", "address": "충청남도 아산시", "equipments": ["RGV"], "pm": "남재준"},
+    "피코이노베이션": {"vendor": "MXRobotics", "address": "경기도 평택시", "equipments": ["STACKER CRANE", "CONVEYOR", "RGV"], "pm": "남재준"},
+    "메디톡스": {"vendor": "MXRobotics", "address": "충청북도 청주시 흥덕구", "equipments": ["STACKER CRANE", "CONVEYOR"], "pm": "남재준"},
+    "연우": {"vendor": "MXRobotics", "address": "인천광역시", "equipments": ["STACKER CRANE", "CONVEYOR", "LIFT"], "pm": "김대호"},
+    "기아자동차 화성": {"vendor": "MXRobotics", "address": "경기도 화성시", "equipments": ["STACKER CRANE"], "pm": "김대호"},
+    "유한킴벌리 충주": {"vendor": "MXRobotics", "address": "충청북도 충주시", "equipments": ["STACKER CRANE", "CONVEYOR", "RGV"], "pm": "김주영 책임"},
+    "유한킴벌리 김천": {"vendor": "MXRobotics", "address": "경상북도 김천시", "equipments": ["STACKER CRANE", "CONVEYOR", "RGV"], "pm": "김주영"},
+    "HK이노엔": {"vendor": "MXRobotics", "address": "충청북도 청주시 흥덕구", "equipments": ["STACKER CRANE", "CONVEYOR", "RGV"], "pm": "채우석 선임"},
+    "중외제약": {"vendor": "MXRobotics", "address": "충청남도 당진시", "equipments": ["STACKER CRANE", "CONVEYOR", "RGV"], "pm": "김주영"},
+    "대웅제약": {"vendor": "MXRobotics", "address": "충청북도 청주시 흥덕구", "equipments": ["STACKER CRANE", "CONVEYOR", "RGV"], "pm": "채우석"},
+    "사조동아원": {"vendor": "MXRobotics", "address": "충청남도 당진시", "equipments": ["STACKER CRANE"], "pm": "채우석"},
+    "아트라스 대전": {"vendor": "MXRobotics", "address": "대전광역시 유성구", "equipments": ["STACKER CRANE", "CONVEYOR", "RGV"], "pm": "채우석"},
+    "유니메드": {"vendor": "MXRobotics", "address": "충청북도 청주시 흥덕구", "equipments": ["STACKER CRANE", "CONVEYOR", "RGV"], "pm": "채우석"},
+    "한국야금": {"vendor": "MXRobotics", "address": "충청북도 진천군", "equipments": ["STACKER CRANE", "CONVEYOR"], "pm": "김주영"},
+    "한국타이어 금산": {"vendor": "MXRobotics", "address": "충청남도 금산군", "equipments": ["STACKER CRANE"], "pm": "김주영"},
+    "SK케미칼": {"vendor": "MXRobotics", "address": "울산광역시 남구", "equipments": ["STACKER CRANE", "CONVEYOR", "RGV"], "pm": "공민수 선임"},
+    "현대모비스": {"vendor": "MXRobotics", "address": "울산광역시 남구", "equipments": ["STACKER CRANE", "CONVEYOR"], "pm": "엄인형 책임"},
+    "UPP": {"vendor": "MXRobotics", "address": "울산광역시 남구", "equipments": ["STACKER CRANE", "CONVEYOR", "RGV"], "pm": "한동현 선임"},
+    "카펙발레오": {"vendor": "MXRobotics", "address": "경상북도 성주군", "equipments": ["STACKER CRANE", "CONVEYOR"], "pm": "김준현 책임"},
+    "GGK": {"vendor": "MXRobotics", "address": "인천광역시 영종구", "equipments": ["STACKER CRANE", "CONVEYOR", "RGV"], "pm": "김대호"},
+    "알피바이오": {"vendor": "MXRobotics", "address": "경기도 화성시 만세구", "equipments": ["STACKER CRANE", "CONVEYOR", "RGV"], "pm": "남재준"},
+    "코오롱글로텍": {"vendor": "MXRobotics", "address": "충청남도 천안시", "equipments": ["STACKER CRANE", "CONVEYOR", "RGV"], "pm": "채우석"}
 }
 
 SC_PARTS_CONFIG = {
@@ -158,7 +207,7 @@ if task_type == "점검":
     equipments = st.multiselect("설비 목록", ["STACKER CRANE", "CONVEYOR", "RGV", "LIFT"], key="equip_val")
 
 # ==========================================
-# 3. 작업 내용 메모장 (점검 전용)
+# 3. 작업 내용 메모장 (점검 모드 전용)
 # ==========================================
 if task_type == "점검":
     st.divider()
@@ -182,7 +231,7 @@ else:
     contents = ""
 
 # ==========================================
-# 4. 현장 사진 대장 (다중 선택 활성화)
+# 4. 현장 사진 대장 (공사 / 점검)
 # ==========================================
 st.divider()
 st.markdown(f"### 📷 {task_type} 사진 대장")
@@ -190,7 +239,7 @@ st.markdown(f"### 📷 {task_type} 사진 대장")
 photo_upload_data = []
 
 if task_type == "공사":
-    st.caption("각 번호별 [공사작업 내역]을 적고, 사진을 최대 2장까지 선택하세요. 1장이면 전체 채움, 2장이면 좌우 5:5로 분할 배치됩니다.")
+    st.caption("좌측 칸/우측 칸 각각 최대 2장까지 선택 가능합니다. 1장이면 칸 전체 채움, 2장이면 해당 칸 안에서 좌우 5:5로 분할 배치됩니다.")
     
     if "const_items_count" not in st.session_state:
         st.session_state.const_items_count = 2
@@ -204,41 +253,57 @@ if task_type == "공사":
                 key=f"const_title_{c_idx}"
             )
             
-            # accept_multiple_files=True 적용 (최대 2장 다중 선택 가능)
-            uploaded_photos = st.file_uploader(
-                f"사진 등록 (1장 또는 2장 선택)", 
-                type=['png', 'jpg', 'jpeg'], 
-                accept_multiple_files=True, 
-                key=f"const_photos_{c_idx}"
-            )
+            p_col1, p_col2 = st.columns(2)
             
-            p_desc1 = ""
-            p_desc2 = ""
-            
-            if uploaded_photos:
-                p_cols = st.columns(2)
-                for p_i, p_f in enumerate(uploaded_photos[:2]):
-                    with p_cols[p_i]:
-                        try:
-                            im_show = PILImage.open(p_f)
-                            st.image(im_show, use_container_width=True)
-                            p_f.seek(0)
-                        except:
-                            pass
-                
-                desc_cols = st.columns(2)
-                with desc_cols[0]:
-                    p_desc1 = st.text_input(f"1번(좌측) 사진 설명", placeholder="예: 작업 전 상태", key=f"c_d1_{c_idx}")
-                if len(uploaded_photos) > 1:
-                    with desc_cols[1]:
-                        p_desc2 = st.text_input(f"2번(우측) 사진 설명", placeholder="예: 작업 완료 상태", key=f"c_d2_{c_idx}")
+            # [좌측 칸 (작업 전)]
+            with p_col1:
+                st.markdown("**[좌측 칸 (작업 전)]**")
+                photos_l = st.file_uploader(
+                    f"좌측 사진 등록 (최대 2장)", 
+                    type=['png', 'jpg', 'jpeg'], 
+                    accept_multiple_files=True, 
+                    key=f"c_img_l_{c_idx}"
+                )
+                if photos_l:
+                    sub_cols_l = st.columns(min(len(photos_l), 2))
+                    for p_i, p_f in enumerate(photos_l[:2]):
+                        with sub_cols_l[p_i]:
+                            try:
+                                im_l = PILImage.open(p_f)
+                                st.image(im_l, use_container_width=True)
+                                p_f.seek(0)
+                            except:
+                                pass
+                d_left = st.text_input(f"좌측 사진 설명", placeholder="예: 작업 전 상태", key=f"c_desc_l_{c_idx}")
+
+            # [우측 칸 (작업 후)]
+            with p_col2:
+                st.markdown("**[우측 칸 (작업 후)]**")
+                photos_r = st.file_uploader(
+                    f"우측 사진 등록 (최대 2장)", 
+                    type=['png', 'jpg', 'jpeg'], 
+                    accept_multiple_files=True, 
+                    key=f"c_img_r_{c_idx}"
+                )
+                if photos_r:
+                    sub_cols_r = st.columns(min(len(photos_r), 2))
+                    for p_i, p_f in enumerate(photos_r[:2]):
+                        with sub_cols_r[p_i]:
+                            try:
+                                im_r = PILImage.open(p_f)
+                                st.image(im_r, use_container_width=True)
+                                p_f.seek(0)
+                            except:
+                                pass
+                d_right = st.text_input(f"우측 사진 설명", placeholder="예: 작업 완료 상태", key=f"c_desc_r_{c_idx}")
 
             photo_upload_data.append({
                 "no": c_idx + 1,
                 "title": task_title,
-                "photos": uploaded_photos[:2] if uploaded_photos else [],
-                "d_left": p_desc1,
-                "d_right": p_desc2
+                "photos_l": photos_l[:2] if photos_l else [],
+                "d_left": d_left,
+                "photos_r": photos_r[:2] if photos_r else [],
+                "d_right": d_right
             })
 
     col_btn1, col_btn2 = st.columns([2, 8])
@@ -382,7 +447,7 @@ def add_scaled_photo(ws, file_obj, col_idx, row_idx, max_w_px, max_h_px, offset_
     pil_img = PILImage.open(file_obj)
     orig_w, orig_h = pil_img.size
 
-    # 원본 비율 유지 (자르지 않고 최대 크기로 스케일링)
+    # 원본 비율을 100% 유지하며 지정 박스 안에 맞춤 (자르지 않음)
     ratio = min(max_w_px / orig_w, max_h_px / orig_h)
     target_w = int(orig_w * ratio)
     target_h = int(orig_h * ratio)
@@ -480,7 +545,7 @@ if st.button(btn_label, use_container_width=True):
                     output_report.seek(0)
 
                 # --------------------------------------------------
-                # B. 사진 대장 생성 (공사/점검 정확한 앵커 처리)
+                # B. 사진 대장 생성 (각 칸별 1장 전체 채움 / 2장 5:5 분할)
                 # --------------------------------------------------
                 if os.path.exists('photo_template.xlsx'):
                     wb_photo = openpyxl.load_workbook('photo_template.xlsx')
@@ -500,9 +565,9 @@ if st.button(btn_label, use_container_width=True):
                         EMU_5MM = 180000   # 5mm 여백
                         EMU_2_5MM = 90000  # 2.5mm 여백
 
-                        BOX_FULL_W_PX = 320
-                        BOX_HALF_W_PX = 155
-                        BOX_H_PX = 200
+                        BOX_FULL_W_PX = 320 # 한 칸 전체 폭
+                        BOX_HALF_W_PX = 155 # 한 칸 내 5:5 분할 폭
+                        BOX_H_PX = 200      # 칸 높이
 
                         for idx, item in enumerate(photo_upload_data):
                             base_r = 10 + (idx * ITEM_HEIGHT)
@@ -514,7 +579,7 @@ if st.button(btn_label, use_container_width=True):
                             no_cell.font = Font(name='굴림체', size=11, bold=True)
                             no_cell.alignment = Alignment(horizontal='center', vertical='center')
 
-                            # 2) 공사작업 내역
+                            # 2) 공사작업 내역 (두 번째 열)
                             title_cell = get_safe_cell(ws_photo, base_r, 2)
                             title_cell.value = item["title"]
                             title_cell.font = Font(name='굴림체', size=10, bold=True)
@@ -531,46 +596,60 @@ if st.button(btn_label, use_container_width=True):
                             d_right_cell.font = Font(name='굴림체', size=9)
                             d_right_cell.alignment = Alignment(horizontal='center', vertical='center')
 
-                            photos_list = item["photos"]
                             row_start_idx = 26 + (idx * ITEM_HEIGHT) # row 27 기준
 
-                            # 케이스 A: 사진이 1장만 올라왔을 때
-                            if len(photos_list) == 1:
+                            # ----------------------------------------------------
+                            # [좌측 칸 (작업 전)] 사진 배치
+                            # ----------------------------------------------------
+                            pl_list = item["photos_l"]
+                            if len(pl_list) == 1:
+                                # 좌측 칸 안에 1장 전체 채움 (D열 시작)
                                 add_scaled_photo(
-                                    ws_photo, 
-                                    photos_list[0], 
-                                    col_idx=3, # D열
-                                    row_idx=row_start_idx, 
-                                    max_w_px=BOX_FULL_W_PX, 
-                                    max_h_px=BOX_H_PX,
-                                    offset_x_emu=EMU_5MM,
-                                    offset_y_emu=EMU_5MM
+                                    ws_photo, pl_list[0], 
+                                    col_idx=3, row_idx=row_start_idx, 
+                                    max_w_px=BOX_FULL_W_PX, max_h_px=BOX_H_PX,
+                                    offset_x_emu=EMU_5MM, offset_y_emu=EMU_5MM
+                                )
+                            elif len(pl_list) >= 2:
+                                # 좌측 칸 안에서 5:5 분할
+                                add_scaled_photo(
+                                    ws_photo, pl_list[0], 
+                                    col_idx=3, row_idx=row_start_idx, 
+                                    max_w_px=BOX_HALF_W_PX, max_h_px=BOX_H_PX,
+                                    offset_x_emu=EMU_5MM, offset_y_emu=EMU_5MM
+                                )
+                                add_scaled_photo(
+                                    ws_photo, pl_list[1], 
+                                    col_idx=5, row_idx=row_start_idx, 
+                                    max_w_px=BOX_HALF_W_PX, max_h_px=BOX_H_PX,
+                                    offset_x_emu=EMU_2_5MM, offset_y_emu=EMU_5MM
                                 )
 
-                            # 케이스 B: 사진이 2장 올라왔을 때 (좌/우 분할)
-                            elif len(photos_list) >= 2:
-                                # 좌측 사진 (D열 시작)
+                            # ----------------------------------------------------
+                            # [우측 칸 (작업 후)] 사진 배치
+                            # ----------------------------------------------------
+                            pr_list = item["photos_r"]
+                            if len(pr_list) == 1:
+                                # 우측 칸 안에 1장 전체 채움 (I열 시작)
                                 add_scaled_photo(
-                                    ws_photo, 
-                                    photos_list[0], 
-                                    col_idx=3, # D열
-                                    row_idx=row_start_idx, 
-                                    max_w_px=BOX_HALF_W_PX, 
-                                    max_h_px=BOX_H_PX,
-                                    offset_x_emu=EMU_5MM,
-                                    offset_y_emu=EMU_5MM
+                                    ws_photo, pr_list[0], 
+                                    col_idx=8, row_idx=row_start_idx, 
+                                    max_w_px=BOX_FULL_W_PX, max_h_px=BOX_H_PX,
+                                    offset_x_emu=EMU_5MM, offset_y_emu=EMU_5MM
                                 )
-
-                                # 우측 사진 (F열 시작)
+                            elif len(pr_list) >= 2:
+                                # 우측 칸 안에서 5:5 분할
                                 add_scaled_photo(
-                                    ws_photo, 
-                                    photos_list[1], 
-                                    col_idx=5, # F열
-                                    row_idx=row_start_idx, 
-                                    max_w_px=BOX_HALF_W_PX, 
-                                    max_h_px=BOX_H_PX,
-                                    offset_x_emu=EMU_2_5MM,
-                                    offset_y_emu=EMU_5MM
+                                    ws_photo, pr_list[0], 
+                                    col_idx=8, row_idx=row_start_idx, 
+                                    max_w_px=BOX_HALF_W_PX, max_h_px=BOX_H_PX,
+                                    offset_x_emu=EMU_5MM, offset_y_emu=EMU_5MM
+                                )
+                                add_scaled_photo(
+                                    ws_photo, pr_list[1], 
+                                    col_idx=10, row_idx=row_start_idx, 
+                                    max_w_px=BOX_HALF_W_PX, max_h_px=BOX_H_PX,
+                                    offset_x_emu=EMU_2_5MM, offset_y_emu=EMU_5MM
                                 )
 
                         # 미사용 하단 템플릿 영역 완전 삭제
@@ -582,48 +661,13 @@ if st.button(btn_label, use_container_width=True):
                                 if type(cell).__name__ != 'MergedCell':
                                     cell.value = None
 
-                    else:
-                        # 점검 모드: 기존 2x2 사진대장 기입
-                        PHOTO_PAGE_ROWS = 85
-                        for p_i in range(5):
-                            p_offset = p_i * PHOTO_PAGE_ROWS
-                            for b in range(4):
-                                desc_r = p_offset + 10 + (b * 19) + 16
-                                cell = get_safe_cell(ws_photo, desc_r, 2)
-                                cell.value = None
-
-                        valid_photos = [x for x in photo_upload_data if (x.get("photos") and len(x["photos"]) > 0) or (x.get("desc") and x["desc"].strip())]
-
-                        for b_idx, item in enumerate(valid_photos):
-                            page_num = b_idx // 4
-                            pos_in_page = b_idx % 4
-                            base_row = (page_num * PHOTO_PAGE_ROWS) + 10 + (pos_in_page * 19)
-                            desc_row = base_row + 16
-
-                            if item.get("desc"):
-                                d_cell = get_safe_cell(ws_photo, desc_row, 2)
-                                d_cell.value = item["desc"]
-                                d_cell.font = Font(name='굴림체', size=10, bold=True)
-                                d_cell.alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
-
-                            if item.get("photos"):
-                                for img_i, p_file in enumerate(item["photos"][:2]):
-                                    p_file.seek(0)
-                                    add_scaled_photo(
-                                        ws_photo,
-                                        p_file,
-                                        col_idx=(1 if img_i == 0 else 3),
-                                        row_idx=base_row - 1,
-                                        max_w_px=320,
-                                        max_h_px=220
-                                    )
-
                     output_photo = io.BytesIO()
                     wb_photo.save(output_photo)
                     output_photo.seek(0)
 
                 st.success(f"🎉 작성이 완료되었습니다!")
 
+                # 공사 모드: [공사 사진대장] 1개만 다운로드
                 if task_type == "공사":
                     st.download_button(
                         label=f"📥 [MXR_공사사진대장] 다운로드",
