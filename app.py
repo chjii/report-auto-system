@@ -2,6 +2,7 @@ import streamlit as st
 import openpyxl
 from openpyxl.styles import Font, Alignment
 from openpyxl.drawing.image import Image
+from openpyxl.drawing.spreadsheet_drawing import TwoCellAnchor, AnchorMarker
 from PIL import Image as PILImage
 import io
 import re
@@ -13,7 +14,7 @@ st.set_page_config(page_title="자동창고 보고서 생성기", layout="wide")
 st.title("📝 현장 보고서 자동 생성기")
 
 # ==========================================
-# 0. 55개 고객사 마스터 DB 및 기본 설정
+# 0. 마스터 DB 및 부위별 설정
 # ==========================================
 BASE_SITE_DB = {
     "아이티센엔텍": {"vendor": "블루원", "address": "강원도 인제군", "equipments": ["STACKER CRANE", "CONVEYOR"], "pm": "김은호 수석"},
@@ -148,10 +149,9 @@ task_type = st.radio("보고서 종류", ["점검", "공사"], horizontal=True)
 st.divider()
 
 # ==========================================
-# 2. 현장 선택 및 자동 완성
+# 2. 현장 선택 및 자동 세팅
 # ==========================================
 st.markdown("### 🏢 현장 선택 및 자동 세팅")
-
 search_mode = st.radio("선택 방식", ["🏢 계약 업체별 필터링", "🔍 전체 현장 통합 검색"], horizontal=True)
 vendors = sorted(list(set(info["vendor"] for info in site_db.values())))
 
@@ -214,6 +214,7 @@ if len(date_range) == 2:
 
 workers = st.text_input("작업자명 및 인원", placeholder="예: 최진명 차장 외 6명")
 
+# 점검 모드일 때만 설비 선택창 출력
 equipments = []
 if task_type == "점검":
     st.markdown("#### ⚙️ 점검 대상 설비")
@@ -252,7 +253,7 @@ st.markdown(f"### 📷 {task_type} 사진 대장")
 photo_upload_data = []
 
 if task_type == "공사":
-    st.caption("각 번호별 [공사작업 내역]과 1번/2번 사진 칸(칸당 최대 2장) 및 사진별 설명을 입력하세요. 입력하신 번호까지만 엑셀에 들어가며, 하단 빈 칸은 모두 정리됩니다.")
+    st.caption("각 번호별 [공사작업 내역]과 좌/우 작업사진 및 사진별 설명을 입력하세요. 입력하신 개수만큼만 작성되고 아래 빈 칸은 모두 삭제됩니다.")
     
     if "const_items_count" not in st.session_state:
         st.session_state.const_items_count = 2
@@ -262,40 +263,34 @@ if task_type == "공사":
             st.markdown(f"#### 🔨 NO {c_idx + 1}")
             task_title = st.text_input(
                 f"공사작업 내역 #{c_idx + 1}", 
-                placeholder="예: 공사 자재 확인, 기존 DOORLOCK 철거, 센서 브라켓 설치 등",
+                placeholder="예: 공사 자재 확인, 기존 DOORLOCK 철거 등",
                 key=f"const_title_{c_idx}"
             )
             
             p_col1, p_col2 = st.columns(2)
             with p_col1:
-                st.markdown("**[1번 사진 칸]**")
-                p_left = st.file_uploader(f"1번 칸 사진 등록 (최대 2장)", type=['png', 'jpg', 'jpeg'], accept_multiple_files=True, key=f"c_img_l_{c_idx}")
+                st.markdown("**[좌측 사진 (작업 전)]**")
+                p_left = st.file_uploader(f"좌측 사진 등록", type=['png', 'jpg', 'jpeg'], key=f"c_img_l_{c_idx}")
                 if p_left:
-                    sub_cols_l = st.columns(2)
-                    for l_i, l_f in enumerate(p_left[:2]):
-                        with sub_cols_l[l_i]:
-                            try:
-                                im_l = PILImage.open(l_f)
-                                st.image(im_l, use_container_width=True)
-                                l_f.seek(0)
-                            except:
-                                pass
-                d_left = st.text_input(f"1번 칸 설명", placeholder="예: 작업 전 상태 확인 / 세부 내용", key=f"c_desc_l_{c_idx}")
+                    try:
+                        im_l = PILImage.open(p_left)
+                        st.image(im_l, use_container_width=True)
+                        p_left.seek(0)
+                    except:
+                        pass
+                d_left = st.text_input(f"좌측 사진 설명", placeholder="예: 작업 전 상태", key=f"c_desc_l_{c_idx}")
 
             with p_col2:
-                st.markdown("**[2번 사진 칸]**")
-                p_right = st.file_uploader(f"2번 칸 사진 등록 (최대 2장)", type=['png', 'jpg', 'jpeg'], accept_multiple_files=True, key=f"c_img_r_{c_idx}")
+                st.markdown("**[우측 사진 (작업 후)]**")
+                p_right = st.file_uploader(f"우측 사진 등록", type=['png', 'jpg', 'jpeg'], key=f"c_img_r_{c_idx}")
                 if p_right:
-                    sub_cols_r = st.columns(2)
-                    for r_i, r_f in enumerate(p_right[:2]):
-                        with sub_cols_r[r_i]:
-                            try:
-                                im_r = PILImage.open(r_f)
-                                st.image(im_r, use_container_width=True)
-                                r_f.seek(0)
-                            except:
-                                pass
-                d_right = st.text_input(f"2번 칸 설명", placeholder="예: 작업 완료 후 상태 / 세부 내용", key=f"c_desc_r_{c_idx}")
+                    try:
+                        im_r = PILImage.open(p_right)
+                        st.image(im_r, use_container_width=True)
+                        p_right.seek(0)
+                    except:
+                        pass
+                d_right = st.text_input(f"우측 사진 설명", placeholder="예: 작업 완료 후 상태", key=f"c_desc_r_{c_idx}")
 
             photo_upload_data.append({
                 "no": c_idx + 1,
@@ -318,7 +313,7 @@ if task_type == "공사":
                 st.rerun()
 
 else:
-    # 점검 모드
+    # 점검 모드: STACKER CRANE 부위별 표준 탭
     if "STACKER CRANE" in equipments:
         st.info("💡 STACKER CRANE 부위별 표준 점검 항목입니다. 사진 업로드 시 해당 항목 텍스트와 함께 엑셀에 들어갑니다.")
         tabs = st.tabs(list(SC_PARTS_CONFIG.keys()))
@@ -533,7 +528,7 @@ if st.button(btn_label, use_container_width=True):
                     output_report.seek(0)
 
                 # --------------------------------------------------
-                # B. 사진 대장 생성 (공사/점검 매핑 및 비율 자동 맞춤)
+                # B. 사진 대장 생성 (공사 모드 좌표 및 5mm 여백 적용)
                 # --------------------------------------------------
                 if os.path.exists('photo_template.xlsx'):
                     wb_photo = openpyxl.load_workbook('photo_template.xlsx')
@@ -550,6 +545,7 @@ if st.button(btn_label, use_container_width=True):
                     if task_type == "공사":
                         ITEM_HEIGHT = 19
                         num_items = len(photo_upload_data)
+                        EMU_5MM = 180000  # 5mm in OpenPyXL EMUs
 
                         for idx, item in enumerate(photo_upload_data):
                             base_r = 10 + (idx * ITEM_HEIGHT)
@@ -567,49 +563,56 @@ if st.button(btn_label, use_container_width=True):
                             title_cell.font = Font(name='굴림체', size=10, bold=True)
                             title_cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
 
-                            # 3) 1번 사진 칸 및 설명
+                            # 3) 좌측 사진 및 설명
                             d_left_cell = get_safe_cell(ws_photo, desc_r, 2)
                             d_left_cell.value = item["d_left"]
                             d_left_cell.font = Font(name='굴림체', size=9)
                             d_left_cell.alignment = Alignment(horizontal='center', vertical='center')
 
-                            p_left_list = item["p_left"] if isinstance(item["p_left"], list) else ([item["p_left"]] if item["p_left"] else [])
-                            num_l = min(len(p_left_list), 2)
-                            for l_i, p_f in enumerate(p_left_list[:2]):
-                                p_f.seek(0)
-                                im_l = PILImage.open(p_f)
-                                max_w = 260 if num_l == 1 else 125
-                                im_l.thumbnail((max_w, 220))
-                                b_arr = io.BytesIO()
-                                im_l.save(b_arr, format='PNG')
-                                b_arr.seek(0)
-                                xl_img = Image(b_arr)
-                                if num_l == 2 and l_i == 1:
-                                    xl_img.left = 135
-                                ws_photo.add_image(xl_img, f"C{base_r}")
-
-                            # 4) 2번 사진 칸 및 설명
+                            # 4) 우측 사진 및 설명
                             d_right_cell = get_safe_cell(ws_photo, desc_r, 4)
                             d_right_cell.value = item["d_right"]
                             d_right_cell.font = Font(name='굴림체', size=9)
                             d_right_cell.alignment = Alignment(horizontal='center', vertical='center')
 
-                            p_right_list = item["p_right"] if isinstance(item["p_right"], list) else ([item["p_right"]] if item["p_right"] else [])
-                            num_r = min(len(p_right_list), 2)
-                            for r_i, p_f in enumerate(p_right_list[:2]):
-                                p_f.seek(0)
-                                im_r = PILImage.open(p_f)
-                                max_w = 260 if num_r == 1 else 125
-                                im_r.thumbnail((max_w, 220))
-                                b_arr = io.BytesIO()
-                                im_r.save(b_arr, format='PNG')
-                                b_arr.seek(0)
-                                xl_img = Image(b_arr)
-                                if num_r == 2 and r_i == 1:
-                                    xl_img.left = 135
-                                ws_photo.add_image(xl_img, f"D{base_r}")
+                            # 사진 1장 단독일 때 (NO.1 요청 사양: D27 시작 ~ H36 끝, 상하좌우 5mm 여백)
+                            has_left = item["p_left"] is not None
+                            has_right = item["p_right"] is not None
 
-                        # 미사용 하단 템플릿 영역 정리
+                            if idx == 0 and ((has_left and not has_right) or (has_right and not has_left)):
+                                single_file = item["p_left"] if has_left else item["p_right"]
+                                single_file.seek(0)
+                                xl_img = Image(single_file)
+                                
+                                # D27 (col=3, row=26) ~ H36 (I37의 5mm 안쪽: col=8, row=36)
+                                marker_from = AnchorMarker(col=3, colOff=EMU_5MM, row=26, rowOff=EMU_5MM)
+                                marker_to = AnchorMarker(col=8, colOff=-EMU_5MM, row=36, rowOff=-EMU_5MM)
+                                xl_img.anchor = TwoCellAnchor('twoCell', marker_from, marker_to)
+                                ws_photo.add_image(xl_img)
+
+                            else:
+                                # 일반 2장 배치
+                                if has_left:
+                                    item["p_left"].seek(0)
+                                    im_l = PILImage.open(item["p_left"])
+                                    im_l.thumbnail((240, 210))
+                                    b_arr_l = io.BytesIO()
+                                    im_l.save(b_arr_l, format='PNG')
+                                    b_arr_l.seek(0)
+                                    xl_img_l = Image(b_arr_l)
+                                    ws_photo.add_image(xl_img_l, f"C{base_r + 1}")
+
+                                if has_right:
+                                    item["p_right"].seek(0)
+                                    im_r = PILImage.open(item["p_right"])
+                                    im_r.thumbnail((240, 210))
+                                    b_arr_r = io.BytesIO()
+                                    im_r.save(b_arr_r, format='PNG')
+                                    b_arr_r.seek(0)
+                                    xl_img_r = Image(b_arr_r)
+                                    ws_photo.add_image(xl_img_r, f"D{base_r + 1}")
+
+                        # 미사용 하단 템플릿 영역 완전 삭제
                         last_used_row = 10 + (num_items * ITEM_HEIGHT)
                         max_clean_row = max(ws_photo.max_row, last_used_row + 100)
                         
@@ -620,6 +623,7 @@ if st.button(btn_label, use_container_width=True):
                                     cell.value = None
 
                     else:
+                        # 점검 모드: 2x2 사진대장 기입
                         PHOTO_PAGE_ROWS = 85
                         for p_i in range(5):
                             p_offset = p_i * PHOTO_PAGE_ROWS
@@ -643,13 +647,11 @@ if st.button(btn_label, use_container_width=True):
                                 d_cell.alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
 
                             if item.get("photos"):
-                                num_p = min(len(item["photos"]), 2)
                                 for img_i, p_file in enumerate(item["photos"][:2]):
                                     p_file.seek(0)
                                     col = 'B' if img_i == 0 else 'D'
                                     img_pil = PILImage.open(p_file)
-                                    max_w = 340 if num_p == 1 else 165
-                                    img_pil.thumbnail((max_w, 270))
+                                    img_pil.thumbnail((340, 270))
                                     b_arr = io.BytesIO()
                                     img_pil.save(b_arr, format='PNG')
                                     b_arr.seek(0)
@@ -662,9 +664,10 @@ if st.button(btn_label, use_container_width=True):
 
                 st.success(f"🎉 작성이 완료되었습니다!")
 
+                # 공사 모드: 오직 [공사 사진대장] 1개만 다운로드
                 if task_type == "공사":
                     st.download_button(
-                        label=f"🖼️ [MXR_공사사진대장] 다운로드",
+                        label=f"📥 [MXR_공사사진대장] 다운로드",
                         data=output_photo,
                         file_name=f"(MXR_공사사진대장){site_name}_{date_str[:8].replace('. ', '')}.xlsx",
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
