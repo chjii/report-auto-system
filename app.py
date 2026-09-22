@@ -76,13 +76,14 @@ BASE_SITE_DB = {
     "코오롱글로텍": {"vendor": "MXRobotics", "address": "충청남도 천안시", "equipments": ["STACKER CRANE", "CONVEYOR", "RGV"], "pm": "채우석"}
 }
 
+# 💡 '상부'로 명칭 변경 및 모든 구간 4개 슬롯 완벽 통일
 ALL_PARTS_CONFIG = {
     "STACKER CRANE": {
-        "S/C CARRIAGE부": ["1) FORK C.F BEARING CLEANING", "2) FORK C.F BEARING GREASE 도포", "3) FORK CHAIN TENSION 확인"],
-        "S/C 주행부": ["1) 주행 WHEEL 상태 확인", "2) 주행 GUIDE ROLLER 상태 확인", "3) 주행 MOTOR BRAKE GAP 확인"],
-        "S/C 승강부": ["1) 외측 GUIDE ROLLER 상태 확인", "2) 내측 GUIDE ROLLER 상태 확인", "3) 승강 MOTOR BRAKE GAP 확인"],
-        "S/C 상부부": ["1) 상부 GUIDE ROLLER 상태 확인", "2) 상부 BRAKE ROLLER 상태 확인"],
-        "S/C 집전부": ["1) 집전기 ROLLER 및 SHOE 상태 확인", "2) 집전기 CLEANING", "3) 기상반 PANEL 단자대 REBOLTING"]
+        "S/C CARRIAGE부": ["1) FORK C.F BEARING CLEANING", "2) FORK C.F BEARING GREASE 도포", "3) FORK CHAIN TENSION 확인", ""],
+        "S/C 주행부": ["1) 주행 WHEEL 상태 확인", "2) 주행 GUIDE ROLLER 상태 확인", "3) 주행 MOTOR BRAKE GAP 확인", ""],
+        "S/C 승강부": ["1) 외측 GUIDE ROLLER 상태 확인", "2) 내측 GUIDE ROLLER 상태 확인", "3) 승강 MOTOR BRAKE GAP 확인", ""],
+        "S/C 상부": ["1) 상부 GUIDE ROLLER 상태 확인", "2) 상부 BRAKE ROLLER 상태 확인", "", ""],
+        "S/C 집전부": ["1) 집전기 ROLLER 및 SHOE 상태 확인", "2) 집전기 CLEANING", "3) 기상반 PANEL 단자대 REBOLTING", "4) 각 SENSOR 단자대 REBOLTING"]
     },
     "CONVEYOR": {
         "CONVEYOR 구동부": [
@@ -143,6 +144,9 @@ DEFAULT_TEXTS = {
     ]
 }
 
+# ==========================================
+# 영구 저장 관리 함수 (창 닫아도 복원)
+# ==========================================
 DATA_FILE = "site_memory.json"
 DRAFT_FILE = "draft_memory.json"
 
@@ -433,6 +437,7 @@ if task_type == "공사":
                 st.rerun()
 
 else:
+    # 💡 모든 부위 4개 슬롯 완벽 지원
     active_tabs_dict = {}
     for eq in equipments:
         if eq in ALL_PARTS_CONFIG:
@@ -542,7 +547,6 @@ def write_equipment_block(ws, defaults, user_lines, row_idx, copied_pages):
     for i, df_text in enumerate(defaults):
         lines_to_write.append((df_text, i == 0, "000000", 'left'))
 
-    # 사용자가 적은 특이사항/점검내역은 7번부터 시작
     start_num = len(defaults)
     for idx, text in enumerate(user_lines):
         color, bold = "000000", False
@@ -562,7 +566,6 @@ def write_equipment_block(ws, defaults, user_lines, row_idx, copied_pages):
 
         cell = get_safe_cell(ws, row_idx, 2)
         cell.value = text
-        # 💡 작업 내용: 14pt 고정 돋움체 및 자동 줄바꿈(wrap_text=True)
         cell.font = Font(name='돋움체', size=14, bold=is_bold, color=color)
         cell.alignment = Alignment(horizontal=align, vertical='center', wrap_text=True)
         row_idx += 1
@@ -578,7 +581,6 @@ def add_scaled_photo(ws, file_obj, col_idx, row_idx, max_w_px, max_h_px, offset_
     pil_img = PILImage.open(file_obj)
     orig_w, orig_h = pil_img.size
 
-    # 원본 비율을 100% 유지하며 지정 박스 안에 맞춤 (자르지 않음)
     ratio = min(max_w_px / orig_w, max_h_px / orig_h)
     target_w = int(orig_w * ratio)
     target_h = int(orig_h * ratio)
@@ -602,7 +604,7 @@ def add_scaled_photo(ws, file_obj, col_idx, row_idx, max_w_px, max_h_px, offset_
     ws.add_image(xl_img)
 
 # ==========================================
-# 5. 생성 및 다운로드 실행
+# 5. 생성 및 다운로드 실행 (연속 다운로드 가능 구조)
 # ==========================================
 st.divider()
 btn_label = f"🚀 [공사 사진대장] 생성하기" if task_type == "공사" else f"🚀 [점검 보고서 & 사진대장] 생성하기"
@@ -644,7 +646,6 @@ if st.button(btn_label, use_container_width=True):
                     get_safe_cell(ws_report, 6, 8).value = author
                     get_safe_cell(ws_report, 10, 9).value = workers
 
-                    # 기존 내용 초기화
                     for r in range(12, 38):
                         cell = get_safe_cell(ws_report, r, 2)
                         cell.value = None
@@ -690,7 +691,6 @@ if st.button(btn_label, use_container_width=True):
                     if hasattr(ws_photo, '_images'):
                         ws_photo._images.clear()
 
-                    # 헤더 정보 주입
                     get_safe_cell(ws_photo, 10, 9).value = f"1. 현장명 : {site_name}"
                     if task_type == "공사":
                         get_safe_cell(ws_photo, 13, 9).value = f"3. 작업일자 : {date_str}"
@@ -700,16 +700,16 @@ if st.button(btn_label, use_container_width=True):
                         get_safe_cell(ws_photo, 16, 9).value = f"4. 작업인원 : {workers}"
 
                     ITEM_LAYOUTS = [
-                        {"base": 27, "desc": 37, "end_row": 38}, # NO 1
-                        {"base": 39, "desc": 49, "end_row": 50}, # NO 2
-                        {"base": 52, "desc": 62, "end_row": 63}, # NO 3
-                        {"base": 64, "desc": 74, "end_row": 75}, # NO 4
-                        {"base": 77, "desc": 87, "end_row": 88}, # NO 5
-                        {"base": 89, "desc": 99, "end_row": 100},# NO 6
-                        {"base": 102, "desc": 112, "end_row": 113},# NO 7
-                        {"base": 114, "desc": 124, "end_row": 125},# NO 8
-                        {"base": 127, "desc": 137, "end_row": 138},# NO 9
-                        {"base": 139, "desc": 149, "end_row": 150} # NO 10
+                        {"base": 27, "desc": 37, "end_row": 38},
+                        {"base": 39, "desc": 49, "end_row": 50},
+                        {"base": 52, "desc": 62, "end_row": 63},
+                        {"base": 64, "desc": 74, "end_row": 75},
+                        {"base": 77, "desc": 87, "end_row": 88},
+                        {"base": 89, "desc": 99, "end_row": 100},
+                        {"base": 102, "desc": 112, "end_row": 113},
+                        {"base": 114, "desc": 124, "end_row": 125},
+                        {"base": 127, "desc": 137, "end_row": 138},
+                        {"base": 139, "desc": 149, "end_row": 150}
                     ]
                     
                     EMU_5MM = 180000
@@ -727,15 +727,12 @@ if st.button(btn_label, use_container_width=True):
                             desc_r = layout["desc"]
                             row_start_idx = base_r - 1
 
-                            # 1) NO 번호 및 공사작업 내역
                             get_safe_cell(ws_photo, base_r, 1).value = item["no"]
                             title_cell = get_safe_cell(ws_photo, base_r, 2)
                             title_cell.value = item["title"]
-                            # 💡 돋움체 14pt 고정 및 자동 줄바꿈
                             title_cell.font = Font(name='돋움체', size=14, bold=True)
                             title_cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
 
-                            # 2) 설명 텍스트
                             d_l = get_safe_cell(ws_photo, desc_r, 4)
                             d_l.value = item["d_left"]
                             d_l.font = Font(name='돋움체', size=14)
@@ -746,7 +743,6 @@ if st.button(btn_label, use_container_width=True):
                             d_r.font = Font(name='돋움체', size=14)
                             d_r.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
 
-                            # 3) 좌측 사진 (D:H)
                             pl_list = item["photos_l"]
                             if len(pl_list) == 1:
                                 add_scaled_photo(ws_photo, pl_list[0], col_idx=3, row_idx=row_start_idx, max_w_px=BOX_FULL_W_PX, max_h_px=BOX_H_PX, offset_x_emu=EMU_5MM, offset_y_emu=EMU_5MM)
@@ -754,7 +750,6 @@ if st.button(btn_label, use_container_width=True):
                                 add_scaled_photo(ws_photo, pl_list[0], col_idx=3, row_idx=row_start_idx, max_w_px=BOX_HALF_W_PX, max_h_px=BOX_H_PX, offset_x_emu=EMU_5MM, offset_y_emu=EMU_5MM)
                                 add_scaled_photo(ws_photo, pl_list[1], col_idx=5, row_idx=row_start_idx, max_w_px=BOX_HALF_W_PX, max_h_px=BOX_H_PX, offset_x_emu=EMU_2_5MM, offset_y_emu=EMU_5MM)
 
-                            # 4) 우측 사진 (I:M)
                             pr_list = item["photos_r"]
                             if len(pr_list) == 1:
                                 add_scaled_photo(ws_photo, pr_list[0], col_idx=8, row_idx=row_start_idx, max_w_px=BOX_FULL_W_PX, max_h_px=BOX_H_PX, offset_x_emu=EMU_5MM, offset_y_emu=EMU_5MM)
@@ -762,7 +757,6 @@ if st.button(btn_label, use_container_width=True):
                                 add_scaled_photo(ws_photo, pr_list[0], col_idx=8, row_idx=row_start_idx, max_w_px=BOX_HALF_W_PX, max_h_px=BOX_H_PX, offset_x_emu=EMU_5MM, offset_y_emu=EMU_5MM)
                                 add_scaled_photo(ws_photo, pr_list[1], col_idx=10, row_idx=row_start_idx, max_w_px=BOX_HALF_W_PX, max_h_px=BOX_H_PX, offset_x_emu=EMU_2_5MM, offset_y_emu=EMU_5MM)
 
-                        # 미사용 하단 템플릿 행 완전 삭제
                         last_keep_row = ITEM_LAYOUTS[min(num_items - 1, len(ITEM_LAYOUTS) - 1)]["end_row"]
                         ranges_to_remove = [mr for mr in list(ws_photo.merged_cells.ranges) if mr.min_row > last_keep_row]
                         for mr in ranges_to_remove:
@@ -779,7 +773,6 @@ if st.button(btn_label, use_container_width=True):
                             ws_photo.delete_rows(last_keep_row + 1, ws_photo.max_row - last_keep_row)
 
                     else:
-                        # 점검 모드 사진대장
                         valid_items = [x for x in photo_upload_data if (x.get("photos") and len(x["photos"]) > 0) or (x.get("desc") and x["desc"].strip())]
 
                         for idx, item in enumerate(valid_items):
@@ -789,24 +782,18 @@ if st.button(btn_label, use_container_width=True):
                             desc_r = layout["desc"]
                             row_start_idx = base_r - 1
 
-                            # 1) NO 번호
                             get_safe_cell(ws_photo, base_r, 1).value = idx + 1
                             
-                            # 2) 작업사항(B:C열) -> 설비 구간명
                             sec_cell = get_safe_cell(ws_photo, base_r, 2)
                             sec_cell.value = item["section"]
-                            # 💡 돋움체 14pt 고정 및 자동 줄바꿈
                             sec_cell.font = Font(name='돋움체', size=14, bold=True)
                             sec_cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
 
-                            # 3) 점검 내용 (D37:H38 빈칸에 기입)
                             d_cell = get_safe_cell(ws_photo, desc_r, 4)
                             d_cell.value = item["desc"]
-                            # 💡 돋움체 14pt 고정 및 자동 줄바꿈
                             d_cell.font = Font(name='돋움체', size=14)
                             d_cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
 
-                            # 4) 사진 배치 (D27:H36) -> 1장이면 전체, 2장이면 5:5 분할
                             p_list = item.get("photos", [])
                             if len(p_list) == 1:
                                 add_scaled_photo(ws_photo, p_list[0], col_idx=3, row_idx=row_start_idx, max_w_px=BOX_FULL_W_PX, max_h_px=BOX_H_PX, offset_x_emu=EMU_5MM, offset_y_emu=EMU_5MM)
@@ -833,36 +820,51 @@ if st.button(btn_label, use_container_width=True):
                     wb_photo.save(output_photo)
                     output_photo.seek(0)
 
-                st.success(f"🎉 작성이 완료되었습니다!")
-
-                # 다운로드 버튼 (파일명 날짜 반영)
-                if task_type == "공사":
-                    st.download_button(
-                        label=f"📥 [MXR_공사사진대장] 다운로드",
-                        data=output_photo,
-                        file_name=f"(MXR_공사사진대장){site_name}_{date_tag}.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                        use_container_width=True
-                    )
-                else:
-                    c1, c2 = st.columns(2)
-                    with c1:
-                        st.download_button(
-                            label=f"📥 [MXR_점검보고서] 다운로드",
-                            data=output_report,
-                            file_name=f"(MXR_점검보고서){site_name}_{date_tag}.xlsx",
-                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                            use_container_width=True
-                        )
-                    if output_photo:
-                        with c2:
-                            st.download_button(
-                                label=f"🖼️ [MXR_점검사진대장] 다운로드",
-                                data=output_photo,
-                                file_name=f"(MXR_점검사진대장){site_name}_{date_tag}.xlsx",
-                                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                                use_container_width=True
-                            )
+                # 💡 핵심: 세션에 저장하여 한 개 다운로드 시 화면이 새로고침되어도 버튼이 사라지지 않음!
+                st.session_state["gen_task_type"] = task_type
+                st.session_state["gen_report_bytes"] = output_report.getvalue() if output_report else None
+                st.session_state["gen_report_name"] = f"(MXR_점검보고서){site_name}_{date_tag}.xlsx"
+                st.session_state["gen_photo_bytes"] = output_photo.getvalue() if output_photo else None
+                tag_label = "공사" if task_type == "공사" else "점검"
+                st.session_state["gen_photo_name"] = f"(MXR_{tag_label}사진대장){site_name}_{date_tag}.xlsx"
+                st.session_state["has_generated"] = True
 
             except Exception as e:
                 st.error(f"오류가 발생했습니다: {e}")
+
+# ==========================================
+# 6. 생성 완료 후 다운로드 영역 (항상 유지)
+# ==========================================
+if st.session_state.get("has_generated"):
+    st.success("🎉 작성이 완료되었습니다! 원하는 보고서를 연속해서 다운로드하세요.")
+    cur_task = st.session_state.get("gen_task_type", "점검")
+    
+    if cur_task == "공사":
+        if st.session_state.get("gen_photo_bytes"):
+            st.download_button(
+                label="📥 [MXR_공사사진대장] 다운로드",
+                data=st.session_state["gen_photo_bytes"],
+                file_name=st.session_state["gen_photo_name"],
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True
+            )
+    else:
+        c1, c2 = st.columns(2)
+        with c1:
+            if st.session_state.get("gen_report_bytes"):
+                st.download_button(
+                    label="📥 [MXR_점검보고서] 다운로드",
+                    data=st.session_state["gen_report_bytes"],
+                    file_name=st.session_state["gen_report_name"],
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    use_container_width=True
+                )
+        with c2:
+            if st.session_state.get("gen_photo_bytes"):
+                st.download_button(
+                    label="🖼️ [MXR_점검사진대장] 다운로드",
+                    data=st.session_state["gen_photo_bytes"],
+                    file_name=st.session_state["gen_photo_name"],
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    use_container_width=True
+                )
