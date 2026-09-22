@@ -142,79 +142,163 @@ DEFAULT_TEXTS = {
     ]
 }
 
+# ==========================================
+# 영구 저장 관리 (브라우저 종료 후에도 복원)
+# ==========================================
 DATA_FILE = "site_memory.json"
 DRAFT_FILE = "draft_memory.json"
 
 def load_memory():
     if os.path.exists(DATA_FILE):
-        with open(DATA_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
+        try:
+            with open(DATA_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except:
+            return {}
     return {}
 
 def save_memory(data):
-    with open(DATA_FILE, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=4)
+    try:
+        with open(DATA_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=4)
+    except:
+        pass
 
-def load_draft():
+def load_full_draft():
     if os.path.exists(DRAFT_FILE):
-        with open(DRAFT_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    return {"contents": ""}
+        try:
+            with open(DRAFT_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except:
+            return {}
+    return {}
 
-def save_draft(contents):
-    with open(DRAFT_FILE, "w", encoding="utf-8") as f:
-        json.dump({"contents": contents}, f, ensure_ascii=False)
+def save_full_draft():
+    try:
+        draft_data = {
+            "task_type": st.session_state.get("task_type_radio", "점검"),
+            "vendor": st.session_state.get("vendor_select", "MXRobotics"),
+            "site": st.session_state.get("site_dropdown", ""),
+            "author": st.session_state.get("author_input", "지창현"),
+            "manager": st.session_state.get("manager_val", ""),
+            "workers": st.session_state.get("workers_input", ""),
+            "contents": st.session_state.get("contents_area", "")
+        }
+        with open(DRAFT_FILE, "w", encoding="utf-8") as f:
+            json.dump(draft_data, f, ensure_ascii=False, indent=4)
+    except:
+        pass
 
 site_db = copy(BASE_SITE_DB)
 site_db.update(load_memory())
+saved_draft = load_full_draft()
 
 # ==========================================
 # 1. 작업 분류 선택
 # ==========================================
 st.markdown("### 📋 작업 분류 선택")
-task_type = st.radio("보고서 종류", ["점검", "공사"], horizontal=True)
+saved_task = saved_draft.get("task_type", "점검")
+task_idx = 0 if saved_task == "점검" else 1
+
+task_type = st.radio(
+    "보고서 종류", 
+    ["점검", "공사"], 
+    index=task_idx, 
+    horizontal=True, 
+    key="task_type_radio",
+    on_change=save_full_draft
+)
 
 st.divider()
 
 # ==========================================
-# 2. 현장 선택 및 자동 세팅
+# 2. 업체 우선 선택 ➔ 현장 및 설비 100% 자동 연동
 # ==========================================
-st.markdown("### 🏢 현장 선택 및 자동 세팅")
-site_options = list(site_db.keys()) + ["직접 입력..."]
+st.markdown("### 🏢 업체 및 현장 선택 (자동 완성)")
 
-if "site_dropdown" not in st.session_state:
-    st.session_state.site_dropdown = site_options[0]
-    st.session_state.addr_val = site_db[site_options[0]].get("address", "")
-    st.session_state.manager_val = site_db[site_options[0]].get("pm", "")
-    st.session_state.equip_val = site_db[site_options[0]].get("equipments", ["STACKER CRANE"])
+vendors_list = sorted(list(set(info.get("vendor", "기타") for info in site_db.values())))
+saved_vendor = saved_draft.get("vendor", "MXRobotics")
+vendor_idx = vendors_list.index(saved_vendor) if saved_vendor in vendors_list else 0
+
+col_v, col_s = st.columns(2)
+
+def on_vendor_change():
+    v = st.session_state.vendor_select
+    sites_for_v = [s for s, info in site_db.items() if info.get("vendor") == v] if v != "전체 업체" else list(site_db.keys())
+    if sites_for_v:
+        st.session_state.site_dropdown = sites_for_v[0]
+        chosen = sites_for_v[0]
+        st.session_state.addr_val = site_db[chosen].get("address", "")
+        st.session_state.manager_val = site_db[chosen].get("pm", "")
+        st.session_state.equip_val = list(site_db[chosen].get("equipments", ["STACKER CRANE"]))
+    save_full_draft()
+
+with col_v:
+    selected_vendor = st.selectbox(
+        "1단계: 업체 선택", 
+        ["전체 업체"] + vendors_list, 
+        index=vendor_idx + 1 if saved_vendor in vendors_list else 0,
+        key="vendor_select",
+        on_change=on_vendor_change
+    )
+
+if selected_vendor == "전체 업체":
+    available_sites = list(site_db.keys())
+else:
+    available_sites = [s for s, info in site_db.items() if info.get("vendor") == selected_vendor]
+
+available_sites_options = available_sites + ["직접 입력..."]
+
+saved_site = saved_draft.get("site", available_sites_options[0])
+site_select_idx = available_sites_options.index(saved_site) if saved_site in available_sites_options else 0
 
 def on_site_change():
     chosen = st.session_state.site_dropdown
     if chosen in site_db:
         st.session_state.addr_val = site_db[chosen].get("address", "")
         st.session_state.manager_val = site_db[chosen].get("pm", "")
-        st.session_state.equip_val = site_db[chosen].get("equipments", ["STACKER CRANE"])
+        # 핵심: 설비 목록을 강제로 덮어씌워 자동 반영 보장
+        st.session_state.equip_val = list(site_db[chosen].get("equipments", ["STACKER CRANE"]))
     elif chosen == "직접 입력...":
         st.session_state.addr_val = ""
         st.session_state.manager_val = ""
         st.session_state.equip_val = ["STACKER CRANE"]
+    save_full_draft()
 
-col_s1, col_s2 = st.columns([1, 2])
-with col_s1:
-    chosen_site = st.selectbox("현장명 선택 (타이핑 검색 가능)", site_options, key="site_dropdown", on_change=on_site_change)
+with col_s:
+    chosen_site = st.selectbox(
+        "2단계: 현장명 선택", 
+        available_sites_options, 
+        index=site_select_idx,
+        key="site_dropdown", 
+        on_change=on_site_change
+    )
 
-with col_s2:
+# 최초 세션 로딩 시 기본값 세팅
+if "equip_val" not in st.session_state:
+    if chosen_site in site_db:
+        st.session_state.addr_val = site_db[chosen_site].get("address", "")
+        st.session_state.manager_val = site_db[chosen_site].get("pm", "")
+        st.session_state.equip_val = list(site_db[chosen_site].get("equipments", ["STACKER CRANE"]))
+    else:
+        st.session_state.addr_val = ""
+        st.session_state.manager_val = ""
+        st.session_state.equip_val = ["STACKER CRANE"]
+
+col_s_name, col_s_addr = st.columns([1, 2])
+with col_s_name:
     if chosen_site == "직접 입력...":
         site_name = st.text_input("새로운 현장명 입력 (필수)")
     else:
         site_name = chosen_site
+with col_s_addr:
     address = st.text_input("현장 주소", key="addr_val")
 
 col1, col2, col3 = st.columns(3)
 with col1:
-    author = st.text_input("작성자", value="지창현")
+    author = st.text_input("작성자", value=saved_draft.get("author", "지창현"), key="author_input", on_change=save_full_draft)
 with col2:
-    manager = st.text_input("담당 PM / 책임자", key="manager_val")
+    manager = st.text_input("담당 PM / 책임자", key="manager_val", on_change=save_full_draft)
 with col3:
     date_range = st.date_input("작업 일자", [])
 
@@ -226,34 +310,39 @@ if len(date_range) == 2:
     else:
         date_str = f"{start.strftime('%y. %m. %d')} ~ {end.strftime('%m. %d')}"
 
-workers = st.text_input("작업자명 및 인원", placeholder="예: 최진명 차장 외 6명")
+workers = st.text_input("작업자명 및 인원", value=saved_draft.get("workers", ""), placeholder="예: 최진명 차장 외 6명", key="workers_input", on_change=save_full_draft)
 
+# 점검 모드일 때 설비 멀티셀렉트 출력 (현장 선택 시 무조건 100% 자동 세팅)
 equipments = []
 if task_type == "점검":
     st.markdown("#### ⚙️ 점검 대상 설비")
-    equipments = st.multiselect("설비 목록", ["STACKER CRANE", "CONVEYOR", "RGV", "LIFT"], key="equip_val")
+    equipments = st.multiselect(
+        "설비 목록 (현장 선택 시 자동 세팅됨)", 
+        ["STACKER CRANE", "CONVEYOR", "RGV", "LIFT"], 
+        key="equip_val"
+    )
 
 # ==========================================
-# 3. 작업 내용 메모장 (점검 모드 전용)
+# 3. 작업 내용 메모장 (실시간 영구 저장)
 # ==========================================
 if task_type == "점검":
     st.divider()
     col_m1, col_m2 = st.columns([8, 2])
     with col_m1:
-        st.markdown(f"**점검 상세 내용 (2번부터 자동 넘버링 및 색상 분류)**")
+        st.markdown(f"**점검 상세 내용 (2번부터 자동 넘버링 및 색상 분류 - 자동 영구 저장)**")
     with col_m2:
         if st.button("🗑️ 메모 초기화"):
-            st.session_state.contents = ""
-            save_draft("")
+            st.session_state.contents_area = ""
+            save_full_draft()
             st.rerun()
 
-    if "contents" not in st.session_state:
-        st.session_state.contents = load_draft().get("contents", "")
-
-    def update_draft():
-        save_draft(st.session_state.contents)
-
-    contents = st.text_area("S/C, CV, RGV, LIFT 키워드가 포함되면 설비별로 자동 분류됩니다.", height=130, key="contents", on_change=update_draft)
+    contents = st.text_area(
+        "S/C, CV, RGV, LIFT 키워드가 포함되면 설비별로 자동 분류됩니다.", 
+        value=saved_draft.get("contents", ""),
+        height=130, 
+        key="contents_area", 
+        on_change=save_full_draft
+    )
 else:
     contents = ""
 
@@ -314,7 +403,7 @@ if task_type == "공사":
                     for p_i, p_f in enumerate(photos_r[:2]):
                         with sub_cols_r[p_i]:
                             try:
-                                im_r = PILImage.open(p_r)
+                                im_r = PILImage.open(p_f)
                                 st.image(im_r, use_container_width=True)
                                 p_r.seek(0)
                             except:
@@ -342,7 +431,7 @@ if task_type == "공사":
                 st.rerun()
 
 else:
-    # 점검 모드: 선택된 모든 설비 탭 동적 활성화
+    # 점검 모드: 선택된 모든 설비 표준 탭 동적 활성화
     active_tabs_dict = {}
     for eq in equipments:
         if eq in ALL_PARTS_CONFIG:
@@ -518,21 +607,22 @@ if st.button(btn_label, use_container_width=True):
         with st.spinner("엑셀 파일을 생성 중입니다..."):
             try:
                 site_db[site_name] = {
-                    "vendor": site_db.get(site_name, {}).get("vendor", "MXRobotics"),
+                    "vendor": site_db.get(site_name, {}).get("vendor", selected_vendor if selected_vendor != "전체 업체" else "MXRobotics"),
                     "address": address,
                     "pm": manager,
                     "equipments": equipments if task_type == "점검" else site_db.get(site_name, {}).get("equipments", ["STACKER CRANE"])
                 }
                 save_memory(site_db)
+                save_full_draft()
 
                 output_report = None
                 output_photo = None
 
                 # --------------------------------------------------
-                # A. 점검 보고서 생성 (template_mxr_점검.xlsx 기반)
+                # A. 점검 보고서 생성 (template_mxr_점검_블루원.xlsx 기반)
                 # --------------------------------------------------
                 if task_type == "점검":
-                    template_filename = "template_mxr_점검.xlsx"
+                    template_filename = "template_mxr_점검_블루원.xlsx"
                     wb_report = openpyxl.load_workbook(template_filename)
                     ws_report = wb_report.active
 
@@ -579,9 +669,9 @@ if st.button(btn_label, use_container_width=True):
                     output_report.seek(0)
 
                 # --------------------------------------------------
-                # B. 사진 대장 생성 (공사: template_mxr_공사.xlsx / 점검: template_mxr_사진.xlsx)
+                # B. 사진 대장 생성 (template_mxr_공사_블루원.xlsx / template_mxr_사진_블루원.xlsx 기반)
                 # --------------------------------------------------
-                target_photo_template = "template_mxr_공사.xlsx" if task_type == "공사" else "template_mxr_사진.xlsx"
+                target_photo_template = "template_mxr_공사_블루원.xlsx" if task_type == "공사" else "template_mxr_사진_블루원.xlsx"
                 
                 if os.path.exists(target_photo_template):
                     wb_photo = openpyxl.load_workbook(target_photo_template)
@@ -600,7 +690,6 @@ if st.button(btn_label, use_container_width=True):
                         get_safe_cell(ws_photo, 16, 9).value = f"4. 작업인원 : {workers}"
 
                     if task_type == "공사":
-                        # template_mxr_공사.xlsx 정확한 행 인덱스 매핑 (2개/페이지)
                         ITEM_LAYOUTS = [
                             {"base": 27, "desc": 37, "end_row": 38}, # NO 1
                             {"base": 39, "desc": 49, "end_row": 50}, # NO 2
@@ -627,7 +716,7 @@ if st.button(btn_label, use_container_width=True):
                             layout = ITEM_LAYOUTS[idx]
                             base_r = layout["base"]
                             desc_r = layout["desc"]
-                            row_start_idx = base_r - 1 # 0-indexed
+                            row_start_idx = base_r - 1
 
                             # 1) NO 번호 및 공사작업 내역
                             get_safe_cell(ws_photo, base_r, 1).value = item["no"]
@@ -647,7 +736,7 @@ if st.button(btn_label, use_container_width=True):
                             d_r.font = Font(name='굴림체', size=9)
                             d_r.alignment = Alignment(horizontal='center', vertical='center')
 
-                            # 3) 좌측 칸 사진 (D:H 영역)
+                            # 3) 좌측 칸 사진 (D:H)
                             pl_list = item["photos_l"]
                             if len(pl_list) == 1:
                                 add_scaled_photo(ws_photo, pl_list[0], col_idx=3, row_idx=row_start_idx, max_w_px=BOX_FULL_W_PX, max_h_px=BOX_H_PX, offset_x_emu=EMU_5MM, offset_y_emu=EMU_5MM)
@@ -655,7 +744,7 @@ if st.button(btn_label, use_container_width=True):
                                 add_scaled_photo(ws_photo, pl_list[0], col_idx=3, row_idx=row_start_idx, max_w_px=BOX_HALF_W_PX, max_h_px=BOX_H_PX, offset_x_emu=EMU_5MM, offset_y_emu=EMU_5MM)
                                 add_scaled_photo(ws_photo, pl_list[1], col_idx=5, row_idx=row_start_idx, max_w_px=BOX_HALF_W_PX, max_h_px=BOX_H_PX, offset_x_emu=EMU_2_5MM, offset_y_emu=EMU_5MM)
 
-                            # 4) 우측 칸 사진 (I:M 영역)
+                            # 4) 우측 칸 사진 (I:M)
                             pr_list = item["photos_r"]
                             if len(pr_list) == 1:
                                 add_scaled_photo(ws_photo, pr_list[0], col_idx=8, row_idx=row_start_idx, max_w_px=BOX_FULL_W_PX, max_h_px=BOX_H_PX, offset_x_emu=EMU_5MM, offset_y_emu=EMU_5MM)
@@ -665,13 +754,10 @@ if st.button(btn_label, use_container_width=True):
 
                         # 미사용 하단 템플릿 행 완전 삭제
                         last_keep_row = ITEM_LAYOUTS[min(num_items - 1, len(ITEM_LAYOUTS) - 1)]["end_row"]
-                        
-                        # 하단 병합 범위 제거
                         ranges_to_remove = [mr for mr in list(ws_photo.merged_cells.ranges) if mr.min_row > last_keep_row]
                         for mr in ranges_to_remove:
                             ws_photo.merged_cells.ranges.remove(mr)
                             
-                        # 하단 셀 내용 및 서식 초기화 후 행 삭제
                         for r_del in range(last_keep_row + 1, ws_photo.max_row + 1):
                             for c_del in range(1, ws_photo.max_column + 1):
                                 cell = ws_photo.cell(row=r_del, column=c_del)
@@ -683,7 +769,7 @@ if st.button(btn_label, use_container_width=True):
                             ws_photo.delete_rows(last_keep_row + 1, ws_photo.max_row - last_keep_row)
 
                     else:
-                        # 점검 모드 사진대장 (template_mxr_사진.xlsx 기반 기입)
+                        # 점검 모드 사진대장 (template_mxr_사진_블루원.xlsx 기반 기입)
                         ITEM_LAYOUTS = [
                             {"base": 27, "desc": 37, "end_row": 38},
                             {"base": 39, "desc": 49, "end_row": 50},
@@ -739,7 +825,7 @@ if st.button(btn_label, use_container_width=True):
 
                 st.success(f"🎉 작성이 완료되었습니다!")
 
-                # 공사 모드: 오직 [공사 사진대장] 1개만 다운로드
+                # 공사 모드: [공사 사진대장] 1개만 다운로드
                 if task_type == "공사":
                     st.download_button(
                         label=f"📥 [MXR_공사사진대장] 다운로드",
