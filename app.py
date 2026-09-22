@@ -1,6 +1,6 @@
 import streamlit as st
 import openpyxl
-from openpyxl.styles import Font, Alignment
+from openpyxl.styles import Font, Alignment, Border, PatternFill
 from openpyxl.drawing.image import Image
 from openpyxl.drawing.spreadsheet_drawing import OneCellAnchor, AnchorMarker
 from openpyxl.drawing.xdr import XDRPositiveSize2D
@@ -15,7 +15,7 @@ st.set_page_config(page_title="자동창고 보고서 생성기", layout="wide")
 st.title("📝 현장 보고서 자동 생성기")
 
 # ==========================================
-# 0. 마스터 DB 및 설비별 표준 점검 항목
+# 0. 55개 고객사 마스터 DB 및 표준 점검 항목
 # ==========================================
 BASE_SITE_DB = {
     "아이티센엔텍": {"vendor": "블루원", "address": "강원도 인제군", "equipments": ["STACKER CRANE", "CONVEYOR"], "pm": "김은호 수석"},
@@ -75,7 +75,6 @@ BASE_SITE_DB = {
     "코오롱글로텍": {"vendor": "MXRobotics", "address": "충청남도 천안시", "equipments": ["STACKER CRANE", "CONVEYOR", "RGV"], "pm": "채우석"}
 }
 
-# 설비별 표준 점검 사진 항목
 ALL_PARTS_CONFIG = {
     "STACKER CRANE": {
         "SC-CARRIAGE부": ["1) FORK C.F BEARING CLEANING", "2) FORK C.F BEARING GREASE 도포", "3) FORK CHAIN TENSION 확인", ""],
@@ -112,33 +111,34 @@ ALL_PARTS_CONFIG = {
 
 DEFAULT_TEXTS = {
     "STACKER CRANE": [
-        "1. STACKER CRANE 점검 공통사항",
-        "  1) 승강부,주행부,FORK부 구동 MOTOR 및 감속기 발열 상태 및 OIL 누유 상태 점검",
-        "  2) CARRIAGE INNER ROLLER, GUIDE ROLLER 구름 상태 및 마모 상태 점검",
-        "  3) FORK CHAIN TENSION 점검 및 C/F BEARING, MC GUIDE GREASE 도포",
-        "  4) STC(기상반) 단자대 풀림 상태 CHECK 및 재조임",
-        "  5) 주행부 구동 WHEEL,종동 WHEEL, GUIDE ROLLER 구름 상태 및 마모 상태 점검"
+        "1. S/C 공통 점검사항",
+        " 1) 승강부,주행부,FORK부 구동 MOTOR 및 감속기 발열 상태 및 OIL 누유 상태 점검",
+        " 2) CARRIAGE INNER ROLLER, GUIDE ROLLER 구름 상태 및 마모 상태 점검",
+        " 3) FORK CHAIN TENSION 점검 및 C/F BEARING, MC GUIDE GREASE 도포 작업",
+        " 4) SMC(기상반) 단자대 풀림 상태 CHECK 및 재조임 작업",
+        " 5) 주행부 구동 WHEEL,종동 WHEEL, GUIDE ROLLER 구름 상태 및 마모 상태 점검",
+        " 6) 주행부 하부 RAIL 고정 CLAMP 상태 및 이음부 CRACK 유무 점검"
     ],
     "CONVEYOR": [
-        "1. CONVEYOR 점검 공통사항",
-        "  1) 구동 MOTOR 및 감속기 발열/소음 상태 및 OIL 누유 상태 점검",
-        "  2) 체인/벨트 장력 상태 및 마모 상태 점검",
-        "  3) 구동/종동 ROLLER 구름 상태 점검 및 베어링 소음 확인",
-        "  4) 센서(광전, 근접 등) 취부 상태 및 동작 상태 점검"
+        "1. CONVEYOR 공통 점검사항",
+        " 1) 구동 MOTOR 및 감속기 발열/소음 상태 및 OIL 누유 상태 점검",
+        " 2) 구동 CHAIN 및 BELT 장력 상태 및 마모 상태 점검",
+        " 3) 구동/종동 ROLLER 구름 상태 점검 및 베어링 소음 확인",
+        " 4) 센서(광전, 근접 등) 취부 상태 및 동작 상태 점검"
     ],
     "RGV": [
-        "1. RGV 점검 공통사항",
-        "  1) 주행부 구동 MOTOR 발열 및 소음, 누유 상태 점검",
-        "  2) 주행 WHEEL 및 GUIDE ROLLER 마모 상태 점검",
-        "  3) 집전기(Collector) 마모 상태 및 단자대 조임 상태 점검",
-        "  4) 충돌 방지 센서 및 통신 장치 상태 점검"
+        "1. RGV 공통 점검사항",
+        " 1) 주행부 구동 MOTOR 발열 및 소음, 누유 상태 점검",
+        " 2) 주행 WHEEL 및 GUIDE ROLLER 마모 상태 점검",
+        " 3) 집전기(Collector) 마모 상태 및 단자대 조임 상태 점검",
+        " 4) 충돌 방지 센서 및 통신 장치 상태 점검"
     ],
     "LIFT": [
-        "1. LIFT 점검 공통사항",
-        "  1) 승강 MOTOR 및 감속기 소음/발열, 누유 상태 점검",
-        "  2) 승강 CHAIN 및 장력, 마모 상태 점검",
-        "  3) GUIDE ROLLER 구름 상태 및 마모 상태 점검",
-        "  4) 상/하한 리미트 센서 및 낙하 방지 장치 동작 상태 점검"
+        "1. LIFT 공통 점검사항",
+        " 1) 승강 MOTOR 및 감속기 소음/발열, 누유 상태 점검",
+        " 2) 승강 CHAIN 및 장력, 마모 상태 점검",
+        " 3) GUIDE ROLLER 구름 상태 및 마모 상태 점검",
+        " 4) 상/하한 리미트 센서 및 낙하 방지 장치 동작 상태 점검"
     ]
 }
 
@@ -258,7 +258,7 @@ else:
     contents = ""
 
 # ==========================================
-# 4. 현장 사진 대장 (설비 선택 기반 동적 생성)
+# 4. 현장 사진 대장 (공사 / 점검)
 # ==========================================
 st.divider()
 st.markdown(f"### 📷 {task_type} 사진 대장")
@@ -266,7 +266,7 @@ st.markdown(f"### 📷 {task_type} 사진 대장")
 photo_upload_data = []
 
 if task_type == "공사":
-    st.caption("좌측 칸/우측 칸 각각 최대 2장까지 선택 가능합니다. 1장이면 칸 전체 채움, 2장이면 해당 칸 안에서 좌우 5:5로 분할 배치됩니다.")
+    st.caption("좌측 칸(작업 전)/우측 칸(작업 후) 각각 최대 2장까지 선택 가능합니다. 1장이면 전체 채움, 2장이면 5:5 분할 배치됩니다. (원본 비율 100% 유지)")
     
     if "const_items_count" not in st.session_state:
         st.session_state.const_items_count = 2
@@ -299,7 +299,7 @@ if task_type == "공사":
                                 p_f.seek(0)
                             except:
                                 pass
-                d_left = st.text_input(f"좌측 사진 설명", placeholder="예: 작업 전 상태", key=f"c_desc_l_{c_idx}")
+                d_left = st.text_input(f"좌측 사진 설명", placeholder="예: 작업 전 상태 확인", key=f"c_desc_l_{c_idx}")
 
             with p_col2:
                 st.markdown("**[우측 칸 (작업 후)]**")
@@ -314,12 +314,12 @@ if task_type == "공사":
                     for p_i, p_f in enumerate(photos_r[:2]):
                         with sub_cols_r[p_i]:
                             try:
-                                im_r = PILImage.open(p_f)
+                                im_r = PILImage.open(p_r)
                                 st.image(im_r, use_container_width=True)
-                                p_right.seek(0)
+                                p_r.seek(0)
                             except:
                                 pass
-                d_right = st.text_input(f"우측 사진 설명", placeholder="예: 작업 완료 상태", key=f"c_desc_r_{c_idx}")
+                d_right = st.text_input(f"우측 사진 설명", placeholder="예: 작업 완료 후 상태", key=f"c_desc_r_{c_idx}")
 
             photo_upload_data.append({
                 "no": c_idx + 1,
@@ -342,7 +342,7 @@ if task_type == "공사":
                 st.rerun()
 
 else:
-    # 점검 모드: 선택된 모든 설비의 표준 탭을 동적으로 생성
+    # 점검 모드: 선택된 모든 설비 탭 동적 활성화
     active_tabs_dict = {}
     for eq in equipments:
         if eq in ALL_PARTS_CONFIG:
@@ -385,8 +385,6 @@ else:
                                         except:
                                             pass
                             photo_upload_data.append({"photos": photos, "desc": custom_desc})
-    else:
-        st.caption("선택된 설비가 없습니다. 설비를 선택하거나 자유 칸으로 등록하세요.")
 
 # --- 엑셀 안전 처리 함수 ---
 def get_safe_cell(ws, row, col):
@@ -482,6 +480,7 @@ def add_scaled_photo(ws, file_obj, col_idx, row_idx, max_w_px, max_h_px, offset_
     pil_img = PILImage.open(file_obj)
     orig_w, orig_h = pil_img.size
 
+    # 원본 비율 유지 (자르지 않고 최대 크기 맞춤)
     ratio = min(max_w_px / orig_w, max_h_px / orig_h)
     target_w = int(orig_w * ratio)
     target_h = int(orig_h * ratio)
@@ -530,20 +529,21 @@ if st.button(btn_label, use_container_width=True):
                 output_photo = None
 
                 # --------------------------------------------------
-                # A. 점검 보고서 생성 (점검 전용)
+                # A. 점검 보고서 생성 (template_mxr_점검.xlsx 기반)
                 # --------------------------------------------------
                 if task_type == "점검":
-                    template_filename = f"template_mxr_점검.xlsx"
+                    template_filename = "template_mxr_점검.xlsx"
                     wb_report = openpyxl.load_workbook(template_filename)
                     ws_report = wb_report.active
 
                     get_safe_cell(ws_report, 5, 3).value = site_name
                     get_safe_cell(ws_report, 6, 3).value = address
-                    get_safe_cell(ws_report, 9, 3).value = f"{site_name} 정기 점검"
-                    get_safe_cell(ws_report, 10, 3).value = date_str
-                    get_safe_cell(ws_report, 10, 9).value = workers
-                    get_safe_cell(ws_report, 6, 8).value = author
+                    get_safe_cell(ws_report, 7, 3).value = "물류기술팀"
                     get_safe_cell(ws_report, 8, 3).value = manager
+                    get_safe_cell(ws_report, 9, 3).value = f"{site_name} 정기점검"
+                    get_safe_cell(ws_report, 10, 3).value = date_str
+                    get_safe_cell(ws_report, 6, 8).value = author
+                    get_safe_cell(ws_report, 10, 9).value = workers
 
                     for r in range(12, 39):
                         cell = get_safe_cell(ws_report, r, 2)
@@ -579,57 +579,75 @@ if st.button(btn_label, use_container_width=True):
                     output_report.seek(0)
 
                 # --------------------------------------------------
-                # B. 사진 대장 생성
+                # B. 사진 대장 생성 (공사: template_mxr_공사.xlsx / 점검: template_mxr_사진.xlsx)
                 # --------------------------------------------------
-                if os.path.exists('photo_template.xlsx'):
-                    wb_photo = openpyxl.load_workbook('photo_template.xlsx')
+                target_photo_template = "template_mxr_공사.xlsx" if task_type == "공사" else "template_mxr_사진.xlsx"
+                
+                if os.path.exists(target_photo_template):
+                    wb_photo = openpyxl.load_workbook(target_photo_template)
                     ws_photo = wb_photo.active
 
                     if hasattr(ws_photo, '_images'):
                         ws_photo._images.clear()
 
-                    get_safe_cell(ws_photo, 5, 2).value = f"{site_name} 자동화 창고 {task_type} 사진"
+                    # 헤더 정보 주입
                     get_safe_cell(ws_photo, 10, 9).value = f"1. 현장명 : {site_name}"
-                    get_safe_cell(ws_photo, 14, 9).value = f"3. 작업일자 : {date_str}"
-                    get_safe_cell(ws_photo, 15, 9).value = f"4. 작업인원 : {workers}"
+                    if task_type == "공사":
+                        get_safe_cell(ws_photo, 13, 9).value = f"3. 작업일자 : {date_str}"
+                        get_safe_cell(ws_photo, 14, 9).value = f"4. 작업인원 : {workers}"
+                    else:
+                        get_safe_cell(ws_photo, 15, 9).value = f"3. 작업일자 : {date_str}"
+                        get_safe_cell(ws_photo, 16, 9).value = f"4. 작업인원 : {workers}"
 
                     if task_type == "공사":
-                        ITEM_HEIGHT = 19
+                        # template_mxr_공사.xlsx 정확한 행 인덱스 매핑 (2개/페이지)
+                        ITEM_LAYOUTS = [
+                            {"base": 27, "desc": 37, "end_row": 38}, # NO 1
+                            {"base": 39, "desc": 49, "end_row": 50}, # NO 2
+                            {"base": 52, "desc": 62, "end_row": 63}, # NO 3
+                            {"base": 64, "desc": 74, "end_row": 75}, # NO 4
+                            {"base": 77, "desc": 87, "end_row": 88}, # NO 5
+                            {"base": 89, "desc": 99, "end_row": 100},# NO 6
+                            {"base": 102, "desc": 112, "end_row": 113},# NO 7
+                            {"base": 114, "desc": 124, "end_row": 125},# NO 8
+                            {"base": 127, "desc": 137, "end_row": 138},# NO 9
+                            {"base": 139, "desc": 149, "end_row": 150} # NO 10
+                        ]
+                        
                         num_items = len(photo_upload_data)
-                        EMU_5MM = 180000   # 5mm 여백
-                        EMU_2_5MM = 90000  # 2.5mm 여백
-
-                        BOX_FULL_W_PX = 320
-                        BOX_HALF_W_PX = 155
-                        BOX_H_PX = 200
+                        EMU_5MM = 180000
+                        EMU_2_5MM = 90000
+                        BOX_FULL_W_PX = 230
+                        BOX_HALF_W_PX = 110
+                        BOX_H_PX = 180
 
                         for idx, item in enumerate(photo_upload_data):
-                            base_r = 10 + (idx * ITEM_HEIGHT)
-                            desc_r = base_r + 16
+                            if idx >= len(ITEM_LAYOUTS):
+                                break
+                            layout = ITEM_LAYOUTS[idx]
+                            base_r = layout["base"]
+                            desc_r = layout["desc"]
+                            row_start_idx = base_r - 1 # 0-indexed
 
-                            no_cell = get_safe_cell(ws_photo, base_r, 1)
-                            no_cell.value = str(item["no"])
-                            no_cell.font = Font(name='굴림체', size=11, bold=True)
-                            no_cell.alignment = Alignment(horizontal='center', vertical='center')
-
+                            # 1) NO 번호 및 공사작업 내역
+                            get_safe_cell(ws_photo, base_r, 1).value = item["no"]
                             title_cell = get_safe_cell(ws_photo, base_r, 2)
                             title_cell.value = item["title"]
                             title_cell.font = Font(name='굴림체', size=10, bold=True)
                             title_cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
 
-                            d_left_cell = get_safe_cell(ws_photo, desc_r, 2)
-                            d_left_cell.value = item["d_left"]
-                            d_left_cell.font = Font(name='굴림체', size=9)
-                            d_left_cell.alignment = Alignment(horizontal='center', vertical='center')
+                            # 2) 설명 텍스트
+                            d_l = get_safe_cell(ws_photo, desc_r, 4)
+                            d_l.value = item["d_left"]
+                            d_l.font = Font(name='굴림체', size=9)
+                            d_l.alignment = Alignment(horizontal='center', vertical='center')
 
-                            d_right_cell = get_safe_cell(ws_photo, desc_r, 4)
-                            d_right_cell.value = item["d_right"]
-                            d_right_cell.font = Font(name='굴림체', size=9)
-                            d_right_cell.alignment = Alignment(horizontal='center', vertical='center')
+                            d_r = get_safe_cell(ws_photo, desc_r, 9)
+                            d_r.value = item["d_right"]
+                            d_r.font = Font(name='굴림체', size=9)
+                            d_r.alignment = Alignment(horizontal='center', vertical='center')
 
-                            row_start_idx = 26 + (idx * ITEM_HEIGHT)
-
-                            # 좌측 칸 사진 배치
+                            # 3) 좌측 칸 사진 (D:H 영역)
                             pl_list = item["photos_l"]
                             if len(pl_list) == 1:
                                 add_scaled_photo(ws_photo, pl_list[0], col_idx=3, row_idx=row_start_idx, max_w_px=BOX_FULL_W_PX, max_h_px=BOX_H_PX, offset_x_emu=EMU_5MM, offset_y_emu=EMU_5MM)
@@ -637,7 +655,7 @@ if st.button(btn_label, use_container_width=True):
                                 add_scaled_photo(ws_photo, pl_list[0], col_idx=3, row_idx=row_start_idx, max_w_px=BOX_HALF_W_PX, max_h_px=BOX_H_PX, offset_x_emu=EMU_5MM, offset_y_emu=EMU_5MM)
                                 add_scaled_photo(ws_photo, pl_list[1], col_idx=5, row_idx=row_start_idx, max_w_px=BOX_HALF_W_PX, max_h_px=BOX_H_PX, offset_x_emu=EMU_2_5MM, offset_y_emu=EMU_5MM)
 
-                            # 우측 칸 사진 배치
+                            # 4) 우측 칸 사진 (I:M 영역)
                             pr_list = item["photos_r"]
                             if len(pr_list) == 1:
                                 add_scaled_photo(ws_photo, pr_list[0], col_idx=8, row_idx=row_start_idx, max_w_px=BOX_FULL_W_PX, max_h_px=BOX_H_PX, offset_x_emu=EMU_5MM, offset_y_emu=EMU_5MM)
@@ -645,51 +663,75 @@ if st.button(btn_label, use_container_width=True):
                                 add_scaled_photo(ws_photo, pr_list[0], col_idx=8, row_idx=row_start_idx, max_w_px=BOX_HALF_W_PX, max_h_px=BOX_H_PX, offset_x_emu=EMU_5MM, offset_y_emu=EMU_5MM)
                                 add_scaled_photo(ws_photo, pr_list[1], col_idx=10, row_idx=row_start_idx, max_w_px=BOX_HALF_W_PX, max_h_px=BOX_H_PX, offset_x_emu=EMU_2_5MM, offset_y_emu=EMU_5MM)
 
-                        # 미사용 하단 영역 삭제
-                        last_used_row = 10 + (num_items * ITEM_HEIGHT)
-                        max_clean_row = max(ws_photo.max_row, last_used_row + 100)
-                        for r_del in range(last_used_row, max_clean_row + 1):
+                        # 미사용 하단 템플릿 행 완전 삭제
+                        last_keep_row = ITEM_LAYOUTS[min(num_items - 1, len(ITEM_LAYOUTS) - 1)]["end_row"]
+                        
+                        # 하단 병합 범위 제거
+                        ranges_to_remove = [mr for mr in list(ws_photo.merged_cells.ranges) if mr.min_row > last_keep_row]
+                        for mr in ranges_to_remove:
+                            ws_photo.merged_cells.ranges.remove(mr)
+                            
+                        # 하단 셀 내용 및 서식 초기화 후 행 삭제
+                        for r_del in range(last_keep_row + 1, ws_photo.max_row + 1):
                             for c_del in range(1, ws_photo.max_column + 1):
                                 cell = ws_photo.cell(row=r_del, column=c_del)
                                 if type(cell).__name__ != 'MergedCell':
                                     cell.value = None
+                                    cell.border = Border()
+                                    cell.fill = PatternFill(fill_type=None)
+                        if ws_photo.max_row > last_keep_row:
+                            ws_photo.delete_rows(last_keep_row + 1, ws_photo.max_row - last_keep_row)
 
                     else:
-                        # 점검 모드 사진대장 (2x2 그리드 순차 기입)
-                        PHOTO_PAGE_ROWS = 85
-                        for p_i in range(5):
-                            p_offset = p_i * PHOTO_PAGE_ROWS
-                            for b in range(4):
-                                desc_r = p_offset + 10 + (b * 19) + 16
-                                cell = get_safe_cell(ws_photo, desc_r, 2)
-                                cell.value = None
+                        # 점검 모드 사진대장 (template_mxr_사진.xlsx 기반 기입)
+                        ITEM_LAYOUTS = [
+                            {"base": 27, "desc": 37, "end_row": 38},
+                            {"base": 39, "desc": 49, "end_row": 50},
+                            {"base": 52, "desc": 62, "end_row": 63},
+                            {"base": 64, "desc": 74, "end_row": 75},
+                            {"base": 77, "desc": 87, "end_row": 88},
+                            {"base": 89, "desc": 99, "end_row": 100},
+                            {"base": 102, "desc": 112, "end_row": 113},
+                            {"base": 114, "desc": 124, "end_row": 125},
+                            {"base": 127, "desc": 137, "end_row": 138},
+                            {"base": 139, "desc": 149, "end_row": 150}
+                        ]
+                        valid_items = [x for x in photo_upload_data if (x.get("photos") and len(x["photos"]) > 0) or (x.get("desc") and x["desc"].strip())]
 
-                        valid_photos = [x for x in photo_upload_data if (x.get("photos") and len(x["photos"]) > 0) or (x.get("desc") and x["desc"].strip())]
+                        for idx, item in enumerate(valid_items):
+                            if idx >= len(ITEM_LAYOUTS): break
+                            layout = ITEM_LAYOUTS[idx]
+                            base_r = layout["base"]
+                            desc_r = layout["desc"]
+                            row_start_idx = base_r - 1
 
-                        for b_idx, item in enumerate(valid_photos):
-                            page_num = b_idx // 4
-                            pos_in_page = b_idx % 4
-                            base_row = (page_num * PHOTO_PAGE_ROWS) + 10 + (pos_in_page * 19)
-                            desc_row = base_row + 16
+                            get_safe_cell(ws_photo, base_r, 1).value = idx + 1
+                            title_cell = get_safe_cell(ws_photo, base_r, 2)
+                            title_cell.value = item["desc"]
+                            title_cell.font = Font(name='굴림체', size=10, bold=True)
+                            title_cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
 
-                            if item.get("desc"):
-                                d_cell = get_safe_cell(ws_photo, desc_row, 2)
-                                d_cell.value = item["desc"]
-                                d_cell.font = Font(name='굴림체', size=10, bold=True)
-                                d_cell.alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
+                            photos = item.get("photos", [])
+                            if len(photos) == 1:
+                                add_scaled_photo(ws_photo, photos[0], col_idx=3, row_idx=row_start_idx, max_w_px=230, max_h_px=180)
+                            elif len(photos) >= 2:
+                                add_scaled_photo(ws_photo, photos[0], col_idx=3, row_idx=row_start_idx, max_w_px=230, max_h_px=180)
+                                add_scaled_photo(ws_photo, photos[1], col_idx=8, row_idx=row_start_idx, max_w_px=230, max_h_px=180)
 
-                            if item.get("photos"):
-                                for img_i, p_file in enumerate(item["photos"][:2]):
-                                    p_file.seek(0)
-                                    col_idx = 1 if img_i == 0 else 3
-                                    add_scaled_photo(
-                                        ws_photo,
-                                        p_file,
-                                        col_idx=col_idx,
-                                        row_idx=base_row - 1,
-                                        max_w_px=320,
-                                        max_h_px=220
-                                    )
+                        if valid_items:
+                            last_keep_row = ITEM_LAYOUTS[min(len(valid_items) - 1, len(ITEM_LAYOUTS) - 1)]["end_row"]
+                            ranges_to_remove = [mr for mr in list(ws_photo.merged_cells.ranges) if mr.min_row > last_keep_row]
+                            for mr in ranges_to_remove:
+                                ws_photo.merged_cells.ranges.remove(mr)
+                            for r_del in range(last_keep_row + 1, ws_photo.max_row + 1):
+                                for c_del in range(1, ws_photo.max_column + 1):
+                                    cell = ws_photo.cell(row=r_del, column=c_del)
+                                    if type(cell).__name__ != 'MergedCell':
+                                        cell.value = None
+                                        cell.border = Border()
+                                        cell.fill = PatternFill(fill_type=None)
+                            if ws_photo.max_row > last_keep_row:
+                                ws_photo.delete_rows(last_keep_row + 1, ws_photo.max_row - last_keep_row)
 
                     output_photo = io.BytesIO()
                     wb_photo.save(output_photo)
@@ -697,6 +739,7 @@ if st.button(btn_label, use_container_width=True):
 
                 st.success(f"🎉 작성이 완료되었습니다!")
 
+                # 공사 모드: 오직 [공사 사진대장] 1개만 다운로드
                 if task_type == "공사":
                     st.download_button(
                         label=f"📥 [MXR_공사사진대장] 다운로드",
