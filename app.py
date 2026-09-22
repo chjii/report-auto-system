@@ -76,17 +76,17 @@ BASE_SITE_DB = {
     "코오롱글로텍": {"vendor": "MXRobotics", "address": "충청남도 천안시", "equipments": ["STACKER CRANE", "CONVEYOR", "RGV"], "pm": "채우석"}
 }
 
-# 💡 '상부'로 명칭 변경 및 모든 구간 4개 슬롯 완벽 통일
+# 💡 'S/C OO부 점검', 'CONVEYOR 점검' 등 명칭 완벽 적용 및 각 구간 4개 슬롯 완비
 ALL_PARTS_CONFIG = {
     "STACKER CRANE": {
-        "S/C CARRIAGE부": ["1) FORK C.F BEARING CLEANING", "2) FORK C.F BEARING GREASE 도포", "3) FORK CHAIN TENSION 확인", ""],
-        "S/C 주행부": ["1) 주행 WHEEL 상태 확인", "2) 주행 GUIDE ROLLER 상태 확인", "3) 주행 MOTOR BRAKE GAP 확인", ""],
-        "S/C 승강부": ["1) 외측 GUIDE ROLLER 상태 확인", "2) 내측 GUIDE ROLLER 상태 확인", "3) 승강 MOTOR BRAKE GAP 확인", ""],
-        "S/C 상부": ["1) 상부 GUIDE ROLLER 상태 확인", "2) 상부 BRAKE ROLLER 상태 확인", "", ""],
-        "S/C 집전부": ["1) 집전기 ROLLER 및 SHOE 상태 확인", "2) 집전기 CLEANING", "3) 기상반 PANEL 단자대 REBOLTING", "4) 각 SENSOR 단자대 REBOLTING"]
+        "S/C CARRIAGE부 점검": ["1) FORK C.F BEARING CLEANING", "2) FORK C.F BEARING GREASE 도포", "3) FORK CHAIN TENSION 확인", ""],
+        "S/C 주행부 점검": ["1) 주행 WHEEL 상태 확인", "2) 주행 GUIDE ROLLER 상태 확인", "3) 주행 MOTOR BRAKE GAP 확인", ""],
+        "S/C 승강부 점검": ["1) 외측 GUIDE ROLLER 상태 확인", "2) 내측 GUIDE ROLLER 상태 확인", "3) 승강 MOTOR BRAKE GAP 확인", ""],
+        "S/C 상부 점검": ["1) 상부 GUIDE ROLLER 상태 확인", "2) 상부 BRAKE ROLLER 상태 확인", "", ""],
+        "S/C 집전부 점검": ["1) 집전기 ROLLER 및 SHOE 상태 확인", "2) 집전기 CLEANING", "3) 기상반 PANEL 단자대 REBOLTING", "4) 각 SENSOR 단자대 REBOLTING"]
     },
     "CONVEYOR": {
-        "CONVEYOR 구동부": [
+        "CONVEYOR 점검": [
             "1) 구동 MOTOR 및 감속기 상태 확인 (소음/누유/발열)",
             "2) 구동 CHAIN 및 BELT TENSION 상태 확인",
             "3) ROLLER 구름 상태 및 베어링 소음 확인",
@@ -94,7 +94,7 @@ ALL_PARTS_CONFIG = {
         ]
     },
     "RGV": {
-        "RGV 주행/집전부": [
+        "RGV 점검": [
             "1) 주행 구동 MOTOR 및 감속기 상태 확인",
             "2) 주행 WHEEL 및 GUIDE ROLLER 마모 상태 확인",
             "3) 집전기(COLLECTOR) SHOE 마모 및 접촉 상태 확인",
@@ -102,7 +102,7 @@ ALL_PARTS_CONFIG = {
         ]
     },
     "LIFT": {
-        "LIFT 승강부": [
+        "LIFT 점검": [
             "1) 승강 MOTOR 및 감속기 소음/발열, 누유 상태 점검",
             "2) 승강 CHAIN 및 TENSION, 마모 상태 점검",
             "3) GUIDE ROLLER 구름 상태 및 마모 상태 점검",
@@ -144,9 +144,6 @@ DEFAULT_TEXTS = {
     ]
 }
 
-# ==========================================
-# 영구 저장 관리 함수 (창 닫아도 복원)
-# ==========================================
 DATA_FILE = "site_memory.json"
 DRAFT_FILE = "draft_memory.json"
 
@@ -437,7 +434,6 @@ if task_type == "공사":
                 st.rerun()
 
 else:
-    # 💡 모든 부위 4개 슬롯 완벽 지원
     active_tabs_dict = {}
     for eq in equipments:
         if eq in ALL_PARTS_CONFIG:
@@ -445,7 +441,7 @@ else:
                 active_tabs_dict[sub_part] = items
 
     if active_tabs_dict:
-        st.info(f"💡 선택된 설비({', '.join(equipments)})의 구간별 점검 항목입니다. 작업사항에는 해당 설비 구간명이, 사진 아래에는 상세 점검 내용이 들어갑니다.")
+        st.info(f"💡 선택된 설비({', '.join(equipments)})의 구간별 점검 항목입니다. 작업사항(B열)에는 해당 구간 점검명이, 사진 밑에는 점검 내용이 매핑됩니다.")
         tab_names = list(active_tabs_dict.keys())
         tabs = st.tabs(tab_names)
 
@@ -481,7 +477,7 @@ else:
                                             pass
                             photo_upload_data.append({
                                 "section": part_name,     # 작업사항 (B열)
-                                "desc": custom_desc,      # 점검 내용 (설명행)
+                                "desc": custom_desc,      # 점검 내용 (하단 D37)
                                 "photos": photos[:2] if photos else []
                             })
     else:
@@ -604,7 +600,7 @@ def add_scaled_photo(ws, file_obj, col_idx, row_idx, max_w_px, max_h_px, offset_
     ws.add_image(xl_img)
 
 # ==========================================
-# 5. 생성 및 다운로드 실행 (연속 다운로드 가능 구조)
+# 5. 생성 및 다운로드 실행 (연속 다운로드 보장)
 # ==========================================
 st.divider()
 btn_label = f"🚀 [공사 사진대장] 생성하기" if task_type == "공사" else f"🚀 [점검 보고서 & 사진대장] 생성하기"
@@ -714,9 +710,11 @@ if st.button(btn_label, use_container_width=True):
                     
                     EMU_5MM = 180000
                     EMU_2_5MM = 90000
-                    BOX_FULL_W_PX = 230
-                    BOX_HALF_W_PX = 110
-                    BOX_H_PX = 180
+                    
+                    # 템플릿 실측 프레임 크기 (D:H 및 I:M 각 약 440px x 240px)
+                    BOX_FULL_W_PX = 440
+                    BOX_HALF_W_PX = 210
+                    BOX_H_PX = 240
 
                     if task_type == "공사":
                         num_items = len(photo_upload_data)
@@ -743,6 +741,7 @@ if st.button(btn_label, use_container_width=True):
                             d_r.font = Font(name='돋움체', size=14)
                             d_r.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
 
+                            # 좌측 사진 (D:H)
                             pl_list = item["photos_l"]
                             if len(pl_list) == 1:
                                 add_scaled_photo(ws_photo, pl_list[0], col_idx=3, row_idx=row_start_idx, max_w_px=BOX_FULL_W_PX, max_h_px=BOX_H_PX, offset_x_emu=EMU_5MM, offset_y_emu=EMU_5MM)
@@ -750,6 +749,7 @@ if st.button(btn_label, use_container_width=True):
                                 add_scaled_photo(ws_photo, pl_list[0], col_idx=3, row_idx=row_start_idx, max_w_px=BOX_HALF_W_PX, max_h_px=BOX_H_PX, offset_x_emu=EMU_5MM, offset_y_emu=EMU_5MM)
                                 add_scaled_photo(ws_photo, pl_list[1], col_idx=5, row_idx=row_start_idx, max_w_px=BOX_HALF_W_PX, max_h_px=BOX_H_PX, offset_x_emu=EMU_2_5MM, offset_y_emu=EMU_5MM)
 
+                            # 우측 사진 (I:M)
                             pr_list = item["photos_r"]
                             if len(pr_list) == 1:
                                 add_scaled_photo(ws_photo, pr_list[0], col_idx=8, row_idx=row_start_idx, max_w_px=BOX_FULL_W_PX, max_h_px=BOX_H_PX, offset_x_emu=EMU_5MM, offset_y_emu=EMU_5MM)
@@ -773,6 +773,7 @@ if st.button(btn_label, use_container_width=True):
                             ws_photo.delete_rows(last_keep_row + 1, ws_photo.max_row - last_keep_row)
 
                     else:
+                        # 점검 모드 사진대장 (작업사항 및 점검내용 매핑)
                         valid_items = [x for x in photo_upload_data if (x.get("photos") and len(x["photos"]) > 0) or (x.get("desc") and x["desc"].strip())]
 
                         for idx, item in enumerate(valid_items):
@@ -782,18 +783,22 @@ if st.button(btn_label, use_container_width=True):
                             desc_r = layout["desc"]
                             row_start_idx = base_r - 1
 
+                            # 1) NO 번호
                             get_safe_cell(ws_photo, base_r, 1).value = idx + 1
                             
+                            # 2) 작업사항(B:C열) -> 설비 구간명 (예: S/C CARRIAGE부 점검, CONVEYOR 점검)
                             sec_cell = get_safe_cell(ws_photo, base_r, 2)
                             sec_cell.value = item["section"]
                             sec_cell.font = Font(name='돋움체', size=14, bold=True)
                             sec_cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
 
+                            # 3) 점검 내용 (D37:H38 빈칸에 기입)
                             d_cell = get_safe_cell(ws_photo, desc_r, 4)
                             d_cell.value = item["desc"]
                             d_cell.font = Font(name='돋움체', size=14)
                             d_cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
 
+                            # 4) 사진 배치 (D27:H36 박스 안에서 1장이면 전체, 2장이면 5:5 분할)
                             p_list = item.get("photos", [])
                             if len(p_list) == 1:
                                 add_scaled_photo(ws_photo, p_list[0], col_idx=3, row_idx=row_start_idx, max_w_px=BOX_FULL_W_PX, max_h_px=BOX_H_PX, offset_x_emu=EMU_5MM, offset_y_emu=EMU_5MM)
@@ -820,7 +825,7 @@ if st.button(btn_label, use_container_width=True):
                     wb_photo.save(output_photo)
                     output_photo.seek(0)
 
-                # 💡 핵심: 세션에 저장하여 한 개 다운로드 시 화면이 새로고침되어도 버튼이 사라지지 않음!
+                # 💡 세션에 파일 데이터를 안전하게 보관하여 Rerun 시에도 다운로드 버튼 유지
                 st.session_state["gen_task_type"] = task_type
                 st.session_state["gen_report_bytes"] = output_report.getvalue() if output_report else None
                 st.session_state["gen_report_name"] = f"(MXR_점검보고서){site_name}_{date_tag}.xlsx"
@@ -833,10 +838,10 @@ if st.button(btn_label, use_container_width=True):
                 st.error(f"오류가 발생했습니다: {e}")
 
 # ==========================================
-# 6. 생성 완료 후 다운로드 영역 (항상 유지)
+# 6. 생성 완료 후 다운로드 영역 (연속 다운로드 지원)
 # ==========================================
 if st.session_state.get("has_generated"):
-    st.success("🎉 작성이 완료되었습니다! 원하는 보고서를 연속해서 다운로드하세요.")
+    st.success("🎉 작성이 완료되었습니다! 원하는 보고서를 다운로드하세요.")
     cur_task = st.session_state.get("gen_task_type", "점검")
     
     if cur_task == "공사":
