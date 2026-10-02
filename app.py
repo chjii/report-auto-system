@@ -76,7 +76,6 @@ BASE_SITE_DB = {
     "코오롱글로텍": {"vendor": "MXRobotics", "address": "충청남도 천안시", "equipments": ["STACKER CRANE", "CONVEYOR", "RGV"], "pm": "채우석"}
 }
 
-# 💡 하단 설명에서 번호를 제거한 깔끔한 표준 점검 명칭
 ALL_PARTS_CONFIG = {
     "STACKER CRANE": {
         "S/C CARRIAGE부 점검": ["FORK C.F BEARING CLEANING", "FORK C.F BEARING GREASE 도포", "FORK CHAIN TENSION 확인", ""],
@@ -746,7 +745,6 @@ def add_scaled_photo_to_slot(ws, photos, base_col, base_row):
         usable_w = TOTAL_W - (2 * EMU_5MM)
         target_w_px = int(usable_w / 9525)
         
-        # 칸에 꽉 차도록 중앙 채움 이미지 생성
         img_buf = get_filled_image_bytes(photos[0], target_w_px, target_h_px)
         xl = Image(img_buf)
         
@@ -758,14 +756,14 @@ def add_scaled_photo_to_slot(ws, photos, base_col, base_row):
         half_w = int((TOTAL_W - (3 * EMU_5MM)) / 2)
         half_w_px = int(half_w / 9525)
         
-        # 1번 사진 (좌측 절반에 꽉 차게)
+        # 1번 사진 (좌측 절반)
         buf1 = get_filled_image_bytes(photos[0], half_w_px, target_h_px)
         xl1 = Image(buf1)
         xl1.anchor = OneCellAnchor(_from=get_normalized_marker(base_col, base_row, EMU_5MM, EMU_5MM), 
                                    ext=XDRPositiveSize2D(half_w, usable_h))
         ws.add_image(xl1)
         
-        # 2번 사진 (우측 절반에 꽉 차게)
+        # 2번 사진 (우측 절반)
         off_x2 = EMU_5MM + half_w + EMU_5MM
         buf2 = get_filled_image_bytes(photos[1], half_w_px, target_h_px)
         xl2 = Image(buf2)
@@ -800,7 +798,7 @@ if st.button(btn_label, use_container_width=True):
                 output_photo = None
 
                 # --------------------------------------------------
-                # A. 점검 보고서 생성 (template_mxr_점검_블루원.xlsx 기반)
+                # A. 점검 보고서 생성 (미선택 설비 및 불필요한 2장 완전 삭제)
                 # --------------------------------------------------
                 if task_type == "점검":
                     template_filename = "template_mxr_점검_블루원.xlsx"
@@ -816,6 +814,7 @@ if st.button(btn_label, use_container_width=True):
                     get_safe_cell(ws_report, 6, 8).value = author
                     get_safe_cell(ws_report, 10, 9).value = workers
 
+                    # 기존 내용 초기화
                     for r in range(12, 38):
                         cell = get_safe_cell(ws_report, r, 2)
                         cell.value = None
@@ -836,6 +835,7 @@ if st.button(btn_label, use_container_width=True):
                         else: sc_lines.append(line)
 
                     current_row = 12
+                    # 💡 선택된 설비만 차례대로 작성 (미선택 설비는 일체 미작성)
                     if "STACKER CRANE" in equipments:
                         current_row = write_equipment_block(ws_report, DEFAULT_TEXTS["STACKER CRANE"], sc_lines, current_row, copied_pages)
                     if "CONVEYOR" in equipments:
@@ -844,6 +844,31 @@ if st.button(btn_label, use_container_width=True):
                         current_row = write_equipment_block(ws_report, DEFAULT_TEXTS["RGV"], rgv_lines, current_row, copied_pages)
                     if "LIFT" in equipments:
                         current_row = write_equipment_block(ws_report, DEFAULT_TEXTS["LIFT"], lift_lines, current_row, copied_pages)
+
+                    # 💡 실제 작성된 페이지만 남기고 2페이지 이후의 불필요한 행과 더미 내용 완전 삭제!
+                    actual_pages = (current_row - 2) // 38 + 1
+                    last_keep_row = actual_pages * 38
+
+                    # 마지막 페이지 작성 끝 줄부터 37행 사이의 빈 줄 잔여 텍스트 정리
+                    for r_blank in range(current_row, last_keep_row):
+                        cell = get_safe_cell(ws_report, r_blank, 2)
+                        cell.value = None
+
+                    # 실제 페이지를 초과하는 뒷페이지(2장 이후) 완전 삭제
+                    ranges_to_remove = [mr for mr in list(ws_report.merged_cells.ranges) if mr.min_row > last_keep_row]
+                    for mr in ranges_to_remove:
+                        ws_report.merged_cells.ranges.remove(mr)
+
+                    for r_del in range(last_keep_row + 1, ws_report.max_row + 1):
+                        for c_del in range(1, ws_report.max_column + 1):
+                            cell = ws_report.cell(row=r_del, column=c_del)
+                            if type(cell).__name__ != 'MergedCell':
+                                cell.value = None
+                                cell.border = Border()
+                                cell.fill = PatternFill(fill_type=None)
+
+                    if ws_report.max_row > last_keep_row:
+                        ws_report.delete_rows(last_keep_row + 1, ws_report.max_row - last_keep_row)
 
                     output_report = io.BytesIO()
                     wb_report.save(output_report)
@@ -944,14 +969,12 @@ if st.button(btn_label, use_container_width=True):
                                                font=Font(name='돋움체', size=14, bold=True),
                                                alignment=Alignment(horizontal='center', vertical='center', wrap_text=True))
 
-                            # 💡 좌측 슬롯 (D:H 채움 및 번호 없는 14pt 설명)
                             add_scaled_photo_to_slot(ws_photo, item_left.get("photos", []), base_col=3, base_row=row_start_idx)
                             style_merged_range(ws_photo, 4, desc_r, 8, desc_r + 1,
                                                value=clean_desc_text(item_left.get("desc", "")),
                                                font=Font(name='돋움체', size=14, bold=True),
                                                alignment=Alignment(horizontal='center', vertical='center', wrap_text=True))
 
-                            # 💡 우측 슬롯 (I:M 채움 및 번호 없는 14pt 설명)
                             if item_right:
                                 add_scaled_photo_to_slot(ws_photo, item_right.get("photos", []), base_col=8, base_row=row_start_idx)
                                 style_merged_range(ws_photo, 9, desc_r, 13, desc_r + 1,
