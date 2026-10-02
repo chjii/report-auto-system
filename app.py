@@ -1,6 +1,6 @@
 import streamlit as st
 import openpyxl
-from openpyxl.styles import Font, Alignment, Border, PatternFill
+from openpyxl.styles import Font, Alignment, Border, PatternFill, Side
 from openpyxl.drawing.image import Image
 from openpyxl.drawing.spreadsheet_drawing import OneCellAnchor, AnchorMarker
 from openpyxl.drawing.xdr import XDRPositiveSize2D
@@ -76,7 +76,6 @@ BASE_SITE_DB = {
     "코오롱글로텍": {"vendor": "MXRobotics", "address": "충청남도 천안시", "equipments": ["STACKER CRANE", "CONVEYOR", "RGV"], "pm": "채우석"}
 }
 
-# 💡 'S/C OO부 점검', 'CONVEYOR 점검' 등 명칭 완벽 적용 및 각 구간 4개 슬롯 완비
 ALL_PARTS_CONFIG = {
     "STACKER CRANE": {
         "S/C CARRIAGE부 점검": ["1) FORK C.F BEARING CLEANING", "2) FORK C.F BEARING GREASE 도포", "3) FORK CHAIN TENSION 확인", ""],
@@ -193,295 +192,378 @@ site_db.update(load_memory())
 saved_draft = load_full_draft()
 
 # ==========================================
-# 1. 작업 분류 선택
+# 1. 탭 구성 (입력 탭 vs 미리보기 탭)
 # ==========================================
-st.markdown("### 📋 작업 분류 선택")
-saved_task = saved_draft.get("task_type", "점검")
-task_idx = 0 if saved_task == "점검" else 1
+main_tab_input, main_tab_preview = st.tabs(["✏️ 데이터 입력", "👁️ 보고서 양식 미리보기"])
 
-task_type = st.radio(
-    "보고서 종류", 
-    ["점검", "공사"], 
-    index=task_idx, 
-    horizontal=True, 
-    key="task_type_radio",
-    on_change=save_full_draft
-)
+with main_tab_input:
+    # ------------------------------------------
+    # 작업 분류 선택
+    # ------------------------------------------
+    st.markdown("### 📋 작업 분류 선택")
+    saved_task = saved_draft.get("task_type", "점검")
+    task_idx = 0 if saved_task == "점검" else 1
 
-st.divider()
-
-# ==========================================
-# 2. 업체 우선 선택 ➔ 현장 및 설비 100% 자동 연동
-# ==========================================
-st.markdown("### 🏢 업체 및 현장 선택 (자동 완성)")
-
-vendors_list = sorted(list(set(info.get("vendor", "기타") for info in site_db.values())))
-saved_vendor = saved_draft.get("vendor", "MXRobotics")
-vendor_idx = vendors_list.index(saved_vendor) if saved_vendor in vendors_list else 0
-
-col_v, col_s = st.columns(2)
-
-def on_vendor_change():
-    v = st.session_state.vendor_select
-    sites_for_v = [s for s, info in site_db.items() if info.get("vendor") == v] if v != "전체 업체" else list(site_db.keys())
-    if sites_for_v:
-        chosen = sites_for_v[0]
-        st.session_state.site_dropdown = chosen
-        st.session_state.addr_val = site_db[chosen].get("address", "")
-        st.session_state.manager_val = site_db[chosen].get("pm", "")
-        st.session_state.equip_val = list(site_db[chosen].get("equipments", ["STACKER CRANE"]))
-    save_full_draft()
-
-with col_v:
-    selected_vendor = st.selectbox(
-        "1단계: 업체 선택", 
-        ["전체 업체"] + vendors_list, 
-        index=vendor_idx + 1 if saved_vendor in vendors_list else 0,
-        key="vendor_select",
-        on_change=on_vendor_change
-    )
-
-if selected_vendor == "전체 업체":
-    available_sites = list(site_db.keys())
-else:
-    available_sites = [s for s, info in site_db.items() if info.get("vendor") == selected_vendor]
-
-available_sites_options = available_sites + ["직접 입력..."]
-
-saved_site = saved_draft.get("site", available_sites_options[0])
-site_select_idx = available_sites_options.index(saved_site) if saved_site in available_sites_options else 0
-
-def on_site_change():
-    chosen = st.session_state.site_dropdown
-    if chosen in site_db:
-        st.session_state.addr_val = site_db[chosen].get("address", "")
-        st.session_state.manager_val = site_db[chosen].get("pm", "")
-        st.session_state.equip_val = list(site_db[chosen].get("equipments", ["STACKER CRANE"]))
-    elif chosen == "직접 입력...":
-        st.session_state.addr_val = ""
-        st.session_state.manager_val = ""
-        st.session_state.equip_val = ["STACKER CRANE"]
-    save_full_draft()
-
-with col_s:
-    chosen_site = st.selectbox(
-        "2단계: 현장명 선택", 
-        available_sites_options, 
-        index=site_select_idx,
-        key="site_dropdown", 
-        on_change=on_site_change
-    )
-
-if "equip_val" not in st.session_state:
-    if chosen_site in site_db:
-        st.session_state.addr_val = site_db[chosen_site].get("address", "")
-        st.session_state.manager_val = site_db[chosen_site].get("pm", "")
-        st.session_state.equip_val = list(site_db[chosen_site].get("equipments", ["STACKER CRANE"]))
-    else:
-        st.session_state.addr_val = ""
-        st.session_state.manager_val = ""
-        st.session_state.equip_val = ["STACKER CRANE"]
-
-col_s_name, col_s_addr = st.columns([1, 2])
-with col_s_name:
-    if chosen_site == "직접 입력...":
-        site_name = st.text_input("새로운 현장명 입력 (필수)")
-    else:
-        site_name = chosen_site
-with col_s_addr:
-    address = st.text_input("현장 주소", key="addr_val")
-
-col1, col2, col3 = st.columns(3)
-with col1:
-    author = st.text_input("작성자", value=saved_draft.get("author", "지창현"), key="author_input", on_change=save_full_draft)
-with col2:
-    manager = st.text_input("담당 PM / 책임자", key="manager_val", on_change=save_full_draft)
-with col3:
-    date_range = st.date_input("작업 일자", [])
-
-date_str = ""
-date_tag = datetime.now().strftime("%y%m%d")
-
-if len(date_range) == 2:
-    start, end = date_range
-    date_tag = start.strftime("%y%m%d")
-    if start.month == end.month:
-        date_str = f"{start.strftime('%y. %m. %d')} ~ {end.strftime('%d')}"
-    else:
-        date_str = f"{start.strftime('%y. %m. %d')} ~ {end.strftime('%m. %d')}"
-elif len(date_range) == 1:
-    start = date_range[0]
-    date_tag = start.strftime("%y%m%d")
-    date_str = start.strftime('%y. %m. %d')
-
-workers = st.text_input("작업자명 및 인원", value=saved_draft.get("workers", ""), placeholder="예: 최진명 차장 외 6명", key="workers_input", on_change=save_full_draft)
-
-equipments = []
-if task_type == "점검":
-    st.markdown("#### ⚙️ 점검 대상 설비")
-    equipments = st.multiselect(
-        "설비 목록 (현장 선택 시 100% 자동 세팅됨)", 
-        ["STACKER CRANE", "CONVEYOR", "RGV", "LIFT"], 
-        key="equip_val"
-    )
-
-# ==========================================
-# 3. 작업 내용 메모장 (점검 모드 전용)
-# ==========================================
-if task_type == "점검":
-    st.divider()
-    col_m1, col_m2 = st.columns([8, 2])
-    with col_m1:
-        st.markdown(f"**점검 상세 내용 (7번부터 자동 넘버링 및 색상 분류 - 자동 영구 저장)**")
-    with col_m2:
-        if st.button("🗑️ 메모 초기화"):
-            st.session_state.contents_area = ""
-            save_full_draft()
-            st.rerun()
-
-    contents = st.text_area(
-        "S/C, CV, RGV, LIFT 키워드가 포함되면 설비별로 자동 분류됩니다.", 
-        value=saved_draft.get("contents", ""),
-        height=130, 
-        key="contents_area", 
+    task_type = st.radio(
+        "보고서 종류", 
+        ["점검", "공사"], 
+        index=task_idx, 
+        horizontal=True, 
+        key="task_type_radio",
         on_change=save_full_draft
     )
-else:
-    contents = ""
 
-# ==========================================
-# 4. 현장 사진 대장 (공사 / 점검)
-# ==========================================
-st.divider()
-st.markdown(f"### 📷 {task_type} 사진 대장")
+    st.divider()
 
-photo_upload_data = []
+    # ------------------------------------------
+    # 업체 및 현장 선택
+    # ------------------------------------------
+    st.markdown("### 🏢 업체 및 현장 선택 (자동 완성)")
 
-if task_type == "공사":
-    st.caption("좌측 칸(작업 전)/우측 칸(작업 후) 각각 최대 2장까지 선택 가능합니다. 1장이면 전체 채움, 2장이면 5:5 분할 배치됩니다. (원본 비율 100% 유지)")
-    
-    if "const_items_count" not in st.session_state:
-        st.session_state.const_items_count = 2
+    vendors_list = sorted(list(set(info.get("vendor", "기타") for info in site_db.values())))
+    saved_vendor = saved_draft.get("vendor", "MXRobotics")
+    vendor_idx = vendors_list.index(saved_vendor) if saved_vendor in vendors_list else 0
 
-    for c_idx in range(st.session_state.const_items_count):
-        with st.container(border=True):
-            st.markdown(f"#### 🔨 NO {c_idx + 1}")
-            task_title = st.text_input(
-                f"공사작업 내역 #{c_idx + 1}", 
-                placeholder="예: 공사 자재 확인, 기존 DOORLOCK 철거 등",
-                key=f"const_title_{c_idx}"
-            )
-            
-            p_col1, p_col2 = st.columns(2)
-            with p_col1:
-                st.markdown("**[좌측 칸 (작업 전)]**")
-                photos_l = st.file_uploader(
-                    f"좌측 사진 등록 (최대 2장)", 
-                    type=['png', 'jpg', 'jpeg'], 
-                    accept_multiple_files=True, 
-                    key=f"c_img_l_{c_idx}"
-                )
-                if photos_l:
-                    sub_cols_l = st.columns(min(len(photos_l), 2))
-                    for p_i, p_f in enumerate(photos_l[:2]):
-                        with sub_cols_l[p_i]:
-                            try:
-                                im_l = PILImage.open(p_f)
-                                st.image(im_l, use_container_width=True)
-                                p_f.seek(0)
-                            except:
-                                pass
-                d_left = st.text_input(f"좌측 사진 설명", placeholder="예: 작업 전 상태 확인", key=f"c_desc_l_{c_idx}")
+    col_v, col_s = st.columns(2)
 
-            with p_col2:
-                st.markdown("**[우측 칸 (작업 후)]**")
-                photos_r = st.file_uploader(
-                    f"우측 사진 등록 (최대 2장)", 
-                    type=['png', 'jpg', 'jpeg'], 
-                    accept_multiple_files=True, 
-                    key=f"c_img_r_{c_idx}"
-                )
-                if photos_r:
-                    sub_cols_r = st.columns(min(len(photos_r), 2))
-                    for p_i, p_f in enumerate(photos_r[:2]):
-                        with sub_cols_r[p_i]:
-                            try:
-                                im_r = PILImage.open(p_r)
-                                st.image(im_r, use_container_width=True)
-                                p_r.seek(0)
-                            except:
-                                pass
-                d_right = st.text_input(f"우측 사진 설명", placeholder="예: 작업 완료 후 상태", key=f"c_desc_r_{c_idx}")
+    def on_vendor_change():
+        v = st.session_state.vendor_select
+        sites_for_v = [s for s, info in site_db.items() if info.get("vendor") == v] if v != "전체 업체" else list(site_db.keys())
+        if sites_for_v:
+            chosen = sites_for_v[0]
+            st.session_state.site_dropdown = chosen
+            st.session_state.addr_val = site_db[chosen].get("address", "")
+            st.session_state.manager_val = site_db[chosen].get("pm", "")
+            st.session_state.equip_val = list(site_db[chosen].get("equipments", ["STACKER CRANE"]))
+        save_full_draft()
 
-            photo_upload_data.append({
-                "no": c_idx + 1,
-                "title": task_title,
-                "photos_l": photos_l[:2] if photos_l else [],
-                "d_left": d_left,
-                "photos_r": photos_r[:2] if photos_r else [],
-                "d_right": d_right
-            })
+    with col_v:
+        selected_vendor = st.selectbox(
+            "1단계: 업체 선택", 
+            ["전체 업체"] + vendors_list, 
+            index=vendor_idx + 1 if saved_vendor in vendors_list else 0,
+            key="vendor_select",
+            on_change=on_vendor_change
+        )
 
-    col_btn1, col_btn2 = st.columns([2, 8])
-    with col_btn1:
-        if st.button("➕ 공사 작업 항목 추가 (NO 추가)"):
-            st.session_state.const_items_count += 1
-            st.rerun()
-    with col_btn2:
-        if st.session_state.const_items_count > 1:
-            if st.button("➖ 마지막 항목 제거"):
-                st.session_state.const_items_count -= 1
+    if selected_vendor == "전체 업체":
+        available_sites = list(site_db.keys())
+    else:
+        available_sites = [s for s, info in site_db.items() if info.get("vendor") == selected_vendor]
+
+    available_sites_options = available_sites + ["직접 입력..."]
+
+    saved_site = saved_draft.get("site", available_sites_options[0])
+    site_select_idx = available_sites_options.index(saved_site) if saved_site in available_sites_options else 0
+
+    def on_site_change():
+        chosen = st.session_state.site_dropdown
+        if chosen in site_db:
+            st.session_state.addr_val = site_db[chosen].get("address", "")
+            st.session_state.manager_val = site_db[chosen].get("pm", "")
+            st.session_state.equip_val = list(site_db[chosen].get("equipments", ["STACKER CRANE"]))
+        elif chosen == "직접 입력...":
+            st.session_state.addr_val = ""
+            st.session_state.manager_val = ""
+            st.session_state.equip_val = ["STACKER CRANE"]
+        save_full_draft()
+
+    with col_s:
+        chosen_site = st.selectbox(
+            "2단계: 현장명 선택", 
+            available_sites_options, 
+            index=site_select_idx,
+            key="site_dropdown", 
+            on_change=on_site_change
+        )
+
+    if "equip_val" not in st.session_state:
+        if chosen_site in site_db:
+            st.session_state.addr_val = site_db[chosen_site].get("address", "")
+            st.session_state.manager_val = site_db[chosen_site].get("pm", "")
+            st.session_state.equip_val = list(site_db[chosen_site].get("equipments", ["STACKER CRANE"]))
+        else:
+            st.session_state.addr_val = ""
+            st.session_state.manager_val = ""
+            st.session_state.equip_val = ["STACKER CRANE"]
+
+    col_s_name, col_s_addr = st.columns([1, 2])
+    with col_s_name:
+        if chosen_site == "직접 입력...":
+            site_name = st.text_input("새로운 현장명 입력 (필수)")
+        else:
+            site_name = chosen_site
+    with col_s_addr:
+        address = st.text_input("현장 주소", key="addr_val")
+
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        author = st.text_input("작성자", value=saved_draft.get("author", "지창현"), key="author_input", on_change=save_full_draft)
+    with col2:
+        manager = st.text_input("담당 PM / 책임자", key="manager_val", on_change=save_full_draft)
+    with col3:
+        date_range = st.date_input("작업 일자", [])
+
+    date_str = ""
+    date_tag = datetime.now().strftime("%y%m%d")
+
+    if len(date_range) == 2:
+        start, end = date_range
+        date_tag = start.strftime("%y%m%d")
+        if start.month == end.month:
+            date_str = f"{start.strftime('%y. %m. %d')} ~ {end.strftime('%d')}"
+        else:
+            date_str = f"{start.strftime('%y. %m. %d')} ~ {end.strftime('%m. %d')}"
+    elif len(date_range) == 1:
+        start = date_range[0]
+        date_tag = start.strftime("%y%m%d")
+        date_str = start.strftime('%y. %m. %d')
+
+    workers = st.text_input("작업자명 및 인원", value=saved_draft.get("workers", ""), placeholder="예: 최진명 차장 외 6명", key="workers_input", on_change=save_full_draft)
+
+    equipments = []
+    if task_type == "점검":
+        st.markdown("#### ⚙️ 점검 대상 설비")
+        equipments = st.multiselect(
+            "설비 목록 (현장 선택 시 100% 자동 세팅됨)", 
+            ["STACKER CRANE", "CONVEYOR", "RGV", "LIFT"], 
+            key="equip_val"
+        )
+
+    # ------------------------------------------
+    # 작업 내용 메모장 (점검 전용)
+    # ------------------------------------------
+    if task_type == "점검":
+        st.divider()
+        col_m1, col_m2 = st.columns([8, 2])
+        with col_m1:
+            st.markdown(f"**점검 상세 내용 (7번부터 자동 넘버링 및 색상 분류 - 자동 영구 저장)**")
+        with col_m2:
+            if st.button("🗑️ 메모 초기화"):
+                st.session_state.contents_area = ""
+                save_full_draft()
                 st.rerun()
 
-else:
-    active_tabs_dict = {}
-    for eq in equipments:
-        if eq in ALL_PARTS_CONFIG:
-            for sub_part, items in ALL_PARTS_CONFIG[eq].items():
-                active_tabs_dict[sub_part] = items
-
-    if active_tabs_dict:
-        st.info(f"💡 선택된 설비({', '.join(equipments)})의 구간별 점검 항목입니다. 작업사항(B열)에는 해당 구간 점검명이, 사진 밑에는 점검 내용이 매핑됩니다.")
-        tab_names = list(active_tabs_dict.keys())
-        tabs = st.tabs(tab_names)
-
-        for t_idx, part_name in enumerate(tab_names):
-            default_items = active_tabs_dict[part_name]
-            with tabs[t_idx]:
-                p_cols = st.columns(2)
-                for item_idx, def_val in enumerate(default_items):
-                    target_col = p_cols[item_idx % 2]
-                    with target_col:
-                        with st.container(border=True):
-                            custom_desc = st.text_input(
-                                f"점검 내용 #{item_idx+1}", 
-                                value=def_val, 
-                                key=f"sc_desc_{t_idx}_{item_idx}", 
-                                placeholder="상세 점검 내용 직접 입력"
-                            )
-                            photos = st.file_uploader(
-                                f"사진 등록 (최대 2장)", 
-                                type=['png', 'jpg', 'jpeg'], 
-                                accept_multiple_files=True, 
-                                key=f"sc_photo_{t_idx}_{item_idx}"
-                            )
-                            if photos:
-                                preview_cols = st.columns(min(len(photos), 2))
-                                for prv_i, prv_f in enumerate(photos[:2]):
-                                    with preview_cols[prv_i]:
-                                        try:
-                                            im = PILImage.open(prv_f)
-                                            st.image(im, use_container_width=True)
-                                            prv_f.seek(0)
-                                        except:
-                                            pass
-                            photo_upload_data.append({
-                                "section": part_name,     # 작업사항 (B열)
-                                "desc": custom_desc,      # 점검 내용 (하단 D37)
-                                "photos": photos[:2] if photos else []
-                            })
+        contents = st.text_area(
+            "S/C, CV, RGV, LIFT 키워드가 포함되면 설비별로 자동 분류됩니다.", 
+            value=saved_draft.get("contents", ""),
+            height=130, 
+            key="contents_area", 
+            on_change=save_full_draft
+        )
     else:
-        st.caption("선택된 설비가 없습니다. 상단에서 설비를 선택해주세요.")
+        contents = ""
+
+    # ------------------------------------------
+    # 현장 사진 대장 입력
+    # ------------------------------------------
+    st.divider()
+    st.markdown(f"### 📷 {task_type} 사진 대장")
+
+    photo_upload_data = []
+
+    if task_type == "공사":
+        st.caption("좌측 칸(작업 전)/우측 칸(작업 후) 각각 최대 2장까지 선택 가능합니다. 1장이면 전체 채움, 2장이면 5:5 분할 배치됩니다. (원본 비율 100% 유지)")
+        
+        if "const_items_count" not in st.session_state:
+            st.session_state.const_items_count = 2
+
+        for c_idx in range(st.session_state.const_items_count):
+            with st.container(border=True):
+                st.markdown(f"#### 🔨 NO {c_idx + 1}")
+                task_title = st.text_input(
+                    f"공사작업 내역 #{c_idx + 1}", 
+                    placeholder="예: 공사 자재 확인, 기존 DOORLOCK 철거 등",
+                    key=f"const_title_{c_idx}"
+                )
+                
+                p_col1, p_col2 = st.columns(2)
+                with p_col1:
+                    st.markdown("**[좌측 칸 (작업 전)]**")
+                    photos_l = st.file_uploader(
+                        f"좌측 사진 등록 (최대 2장)", 
+                        type=['png', 'jpg', 'jpeg'], 
+                        accept_multiple_files=True, 
+                        key=f"c_img_l_{c_idx}"
+                    )
+                    if photos_l:
+                        sub_cols_l = st.columns(min(len(photos_l), 2))
+                        for p_i, p_f in enumerate(photos_l[:2]):
+                            with sub_cols_l[p_i]:
+                                try:
+                                    im_l = PILImage.open(p_f)
+                                    st.image(im_l, use_container_width=True)
+                                    p_f.seek(0)
+                                except:
+                                    pass
+                    d_left = st.text_input(f"좌측 사진 설명", placeholder="예: 작업 전 상태 확인", key=f"c_desc_l_{c_idx}")
+
+                with p_col2:
+                    st.markdown("**[우측 칸 (작업 후)]**")
+                    photos_r = st.file_uploader(
+                        f"우측 사진 등록 (최대 2장)", 
+                        type=['png', 'jpg', 'jpeg'], 
+                        accept_multiple_files=True, 
+                        key=f"c_img_r_{c_idx}"
+                    )
+                    if photos_r:
+                        sub_cols_r = st.columns(min(len(photos_r), 2))
+                        for p_i, p_f in enumerate(photos_r[:2]):
+                            with sub_cols_r[p_i]:
+                                try:
+                                    im_r = PILImage.open(p_r)
+                                    st.image(im_r, use_container_width=True)
+                                    p_r.seek(0)
+                                except:
+                                    pass
+                    d_right = st.text_input(f"우측 사진 설명", placeholder="예: 작업 완료 후 상태", key=f"c_desc_r_{c_idx}")
+
+                photo_upload_data.append({
+                    "no": c_idx + 1,
+                    "title": task_title,
+                    "photos_l": photos_l[:2] if photos_l else [],
+                    "d_left": d_left,
+                    "photos_r": photos_r[:2] if photos_r else [],
+                    "d_right": d_right
+                })
+
+        col_btn1, col_btn2 = st.columns([2, 8])
+        with col_btn1:
+            if st.button("➕ 공사 작업 항목 추가 (NO 추가)"):
+                st.session_state.const_items_count += 1
+                st.rerun()
+        with col_btn2:
+            if st.session_state.const_items_count > 1:
+                if st.button("➖ 마지막 항목 제거"):
+                    st.session_state.const_items_count -= 1
+                    st.rerun()
+
+    else:
+        active_tabs_dict = {}
+        for eq in equipments:
+            if eq in ALL_PARTS_CONFIG:
+                for sub_part, items in ALL_PARTS_CONFIG[eq].items():
+                    active_tabs_dict[sub_part] = items
+
+        if active_tabs_dict:
+            st.info(f"💡 선택된 설비({', '.join(equipments)})의 구간별 점검 항목입니다. 작업사항(B열)에는 해당 구간 점검명이, 사진 밑(D37/I37)에는 14pt 돋움체 점검 내용이 매핑됩니다.")
+            tab_names = list(active_tabs_dict.keys())
+            tabs = st.tabs(tab_names)
+
+            for t_idx, part_name in enumerate(tab_names):
+                default_items = active_tabs_dict[part_name]
+                with tabs[t_idx]:
+                    p_cols = st.columns(2)
+                    for item_idx, def_val in enumerate(default_items):
+                        target_col = p_cols[item_idx % 2]
+                        with target_col:
+                            with st.container(border=True):
+                                custom_desc = st.text_input(
+                                    f"점검 내용 #{item_idx+1}", 
+                                    value=def_val, 
+                                    key=f"sc_desc_{t_idx}_{item_idx}", 
+                                    placeholder="상세 점검 내용 직접 입력"
+                                )
+                                photos = st.file_uploader(
+                                    f"사진 등록 (최대 2장)", 
+                                    type=['png', 'jpg', 'jpeg'], 
+                                    accept_multiple_files=True, 
+                                    key=f"sc_photo_{t_idx}_{item_idx}"
+                                )
+                                if photos:
+                                    preview_cols = st.columns(min(len(photos), 2))
+                                    for prv_i, prv_f in enumerate(photos[:2]):
+                                        with preview_cols[prv_i]:
+                                            try:
+                                                im = PILImage.open(prv_f)
+                                                st.image(im, use_container_width=True)
+                                                prv_f.seek(0)
+                                            except:
+                                                pass
+                                photo_upload_data.append({
+                                    "section": part_name,     # 작업사항 (B열)
+                                    "desc": custom_desc,      # 점검 내용 (D37/I37)
+                                    "photos": photos[:2] if photos else []
+                                })
+        else:
+            st.caption("선택된 설비가 없습니다. 상단에서 설비를 선택해주세요.")
+
+# ==========================================
+# 2. 👁️ 보고서 양식 미리보기 탭
+# ==========================================
+with main_tab_preview:
+    st.markdown(f"### 📋 {site_name} 자동화 창고 {task_type} 보고서 양식 미리보기")
+    with st.container(border=True):
+        st.markdown(f"#### 🏢 기본 현장 정보")
+        p_c1, p_c2, p_c3 = st.columns(3)
+        p_c1.markdown(f"**현장명:** {site_name}")
+        p_c2.markdown(f"**소재지:** {address}")
+        p_c3.markdown(f"**작업일자:** {date_str if date_str else '미지정'}")
+        p_c1.markdown(f"**작성자:** {author}")
+        p_c2.markdown(f"**담당 PM:** {manager}")
+        p_c3.markdown(f"**작업인원:** {workers if workers else '미지정'}")
+
+    st.markdown("#### 🖼️ 사진대장 엑셀 배치 미리보기 (A4 레이아웃 기준)")
+    
+    if task_type == "공사":
+        for item in photo_upload_data:
+            with st.container(border=True):
+                st.markdown(f"**NO. {item['no']} | 공사작업 내역: {item['title'] if item['title'] else '(미입력)'}**")
+                pv_c1, pv_c2 = st.columns(2)
+                with pv_c1:
+                    st.caption("📷 [좌측 칸 (작업 전)]")
+                    if item["photos_l"]:
+                        sub_pvc = st.columns(len(item["photos_l"]))
+                        for p_idx, p_file in enumerate(item["photos_l"]):
+                            with sub_pvc[p_idx]:
+                                p_file.seek(0)
+                                st.image(PILImage.open(p_file), use_container_width=True)
+                    st.info(f"**설명:** {item['d_left'] if item['d_left'] else '(설명 없음)'}")
+                with pv_c2:
+                    st.caption("📷 [우측 칸 (작업 후)]")
+                    if item["photos_r"]:
+                        sub_pvc = st.columns(len(item["photos_r"]))
+                        for p_idx, p_file in enumerate(item["photos_r"]):
+                            with sub_pvc[p_idx]:
+                                p_file.seek(0)
+                                st.image(PILImage.open(p_file), use_container_width=True)
+                    st.info(f"**설명:** {item['d_right'] if item['d_right'] else '(설명 없음)'}")
+    else:
+        # 점검 모드: 좌/우 2개씩 짝지어 미리보기
+        valid_items_pv = [x for x in photo_upload_data if (x.get("photos") and len(x["photos"]) > 0) or (x.get("desc") and x["desc"].strip())]
+        if not valid_items_pv:
+            st.caption("등록된 점검 사진 및 내용이 없습니다. '데이터 입력' 탭에서 입력해주세요.")
+        else:
+            for pair_idx in range(0, len(valid_items_pv), 2):
+                no_num = (pair_idx // 2) + 1
+                item_left = valid_items_pv[pair_idx]
+                item_right = valid_items_pv[pair_idx + 1] if pair_idx + 1 < len(valid_items_pv) else None
+                sec_name = item_left["section"]
+
+                with st.container(border=True):
+                    st.markdown(f"**NO. {no_num} | 작업사항: {sec_name}**")
+                    pv_c1, pv_c2 = st.columns(2)
+                    with pv_c1:
+                        st.caption("📷 [좌측 칸 - D27:H36]")
+                        if item_left["photos"]:
+                            sub_pvc = st.columns(len(item_left["photos"]))
+                            for p_idx, p_file in enumerate(item_left["photos"]):
+                                with sub_pvc[p_idx]:
+                                    p_file.seek(0)
+                                    st.image(PILImage.open(p_file), use_container_width=True)
+                        st.info(f"**점검 내용:** {item_left['desc'] if item_left['desc'] else '(내용 없음)'}")
+                    with pv_c2:
+                        st.caption("📷 [우측 칸 - I27:M36]")
+                        if item_right:
+                            if item_right["photos"]:
+                                sub_pvc = st.columns(len(item_right["photos"]))
+                                for p_idx, p_file in enumerate(item_right["photos"]):
+                                    with sub_pvc[p_idx]:
+                                        p_file.seek(0)
+                                        st.image(PILImage.open(p_file), use_container_width=True)
+                            st.info(f"**점검 내용:** {item_right['desc'] if item_right['desc'] else '(내용 없음)'}")
+                        else:
+                            st.caption("(우측 칸 비어있음)")
 
 # --- 엑셀 안전 처리 함수 ---
 def get_safe_cell(ws, row, col):
@@ -491,6 +573,31 @@ def get_safe_cell(ws, row, col):
             if mr.min_row <= row <= mr.max_row and mr.min_col <= col <= mr.max_col:
                 return ws.cell(row=mr.min_row, column=mr.min_col)
     return cell
+
+def style_merged_range(ws, start_col, start_row, end_col, end_row, value=None, font=None, alignment=None):
+    coord = f"{openpyxl.utils.get_column_letter(start_col)}{start_row}:{openpyxl.utils.get_column_letter(end_col)}{end_row}"
+    is_merged = False
+    for mr in ws.merged_cells.ranges:
+        if mr.coord == coord:
+            is_merged = True
+            break
+    if not is_merged:
+        try:
+            ws.merge_cells(coord)
+        except:
+            pass
+        
+    top_cell = ws.cell(row=start_row, column=start_col)
+    if value is not None:
+        top_cell.value = value
+        
+    for r in range(start_row, end_row + 1):
+        for c in range(start_col, end_col + 1):
+            cell = ws.cell(row=r, column=c)
+            if font:
+                cell.font = font
+            if alignment:
+                cell.alignment = alignment
 
 def sort_rules(text):
     is_need_replace = 1 if "교체 필요" in text else 0
@@ -572,35 +679,85 @@ def write_equipment_block(ws, defaults, user_lines, row_idx, copied_pages):
 # ==========================================
 # 💡 비율 유지 무자름 스케일링 앵커 함수
 # ==========================================
-def add_scaled_photo(ws, file_obj, col_idx, row_idx, max_w_px, max_h_px, offset_x_emu=180000, offset_y_emu=180000):
-    file_obj.seek(0)
-    pil_img = PILImage.open(file_obj)
-    orig_w, orig_h = pil_img.size
-
-    ratio = min(max_w_px / orig_w, max_h_px / orig_h)
-    target_w = int(orig_w * ratio)
-    target_h = int(orig_h * ratio)
-
-    extra_pad_x = int((max_w_px - target_w) / 2 * 9525)
-    extra_pad_y = int((max_h_px - target_h) / 2 * 9525)
-
-    b_arr = io.BytesIO()
-    pil_img.save(b_arr, format='PNG')
-    b_arr.seek(0)
-    xl_img = Image(b_arr)
-
-    marker = AnchorMarker(
-        col=col_idx, 
-        colOff=offset_x_emu + extra_pad_x, 
-        row=row_idx, 
-        rowOff=offset_y_emu + extra_pad_y
-    )
-    size = XDRPositiveSize2D(int(target_w * 9525), int(target_h * 9525))
-    xl_img.anchor = OneCellAnchor(_from=marker, ext=size)
-    ws.add_image(xl_img)
+def add_scaled_photo_to_slot(ws, photos, base_col, base_row):
+    """
+    한 슬롯(가로 5개 컬럼, 세로 10개 행)에 사진 1장 또는 2장을 비율 유지하여 사방 5mm 여백 두고 배치
+    """
+    if not photos:
+        return
+        
+    TOTAL_W_EMU = 4881560 # 5개 열(너비 13) 전체 폭
+    TOTAL_H_EMU = 2476500 # 10개 행(높이 19.5pt) 전체 높이
+    EMU_5MM = 180000     # 5mm 여백
+    
+    if len(photos) == 1:
+        # 1장일 때: 해당 칸 전체 폭에 꽉 차게 중앙 정렬
+        p_file = photos[0]
+        p_file.seek(0)
+        pil_img = PILImage.open(p_file)
+        orig_w, orig_h = pil_img.size
+        
+        usable_w = TOTAL_W_EMU - (2 * EMU_5MM)
+        usable_h = TOTAL_H_EMU - (2 * EMU_5MM)
+        
+        ratio = min(usable_w / orig_w, usable_h / orig_h)
+        tw = int(orig_w * ratio)
+        th = int(orig_h * ratio)
+        
+        offset_x = EMU_5MM + int((usable_w - tw) / 2)
+        offset_y = EMU_5MM + int((usable_h - th) / 2)
+        
+        b_arr = io.BytesIO()
+        pil_img.save(b_arr, format='PNG')
+        b_arr.seek(0)
+        xl_img = Image(b_arr)
+        
+        marker = AnchorMarker(col=base_col, colOff=offset_x, row=base_row, rowOff=offset_y)
+        size = XDRPositiveSize2D(tw, th)
+        xl_img.anchor = OneCellAnchor(_from=marker, ext=size)
+        ws.add_image(xl_img)
+        
+    elif len(photos) >= 2:
+        # 2장일 때: 해당 칸 내부에서 5:5 좌우 분할 (중앙 5mm 간격)
+        usable_h = TOTAL_H_EMU - (2 * EMU_5MM)
+        half_w = int((TOTAL_W_EMU - (3 * EMU_5MM)) / 2)
+        
+        # 1번 사진 (좌측)
+        p1 = photos[0]
+        p1.seek(0)
+        im1 = PILImage.open(p1)
+        w1, h1 = im1.size
+        r1 = min(half_w / w1, usable_h / h1)
+        tw1, th1 = int(w1 * r1), int(h1 * r1)
+        off_x1 = EMU_5MM + int((half_w - tw1) / 2)
+        off_y1 = EMU_5MM + int((usable_h - th1) / 2)
+        
+        b1 = io.BytesIO()
+        im1.save(b1, format='PNG')
+        b1.seek(0)
+        xl1 = Image(b1)
+        xl1.anchor = OneCellAnchor(_from=AnchorMarker(col=base_col, colOff=off_x1, row=base_row, rowOff=off_y1), ext=XDRPositiveSize2D(tw1, th1))
+        ws.add_image(xl1)
+        
+        # 2번 사진 (우측)
+        p2 = photos[1]
+        p2.seek(0)
+        im2 = PILImage.open(p2)
+        w2, h2 = im2.size
+        r2 = min(half_w / w2, usable_h / h2)
+        tw2, th2 = int(w2 * r2), int(h2 * r2)
+        off_x2 = EMU_5MM + half_w + EMU_5MM + int((half_w - tw2) / 2)
+        off_y2 = EMU_5MM + int((usable_h - th2) / 2)
+        
+        b2 = io.BytesIO()
+        im2.save(b2, format='PNG')
+        b2.seek(0)
+        xl2 = Image(b2)
+        xl2.anchor = OneCellAnchor(_from=AnchorMarker(col=base_col, colOff=off_x2, row=base_row, rowOff=off_y2), ext=XDRPositiveSize2D(tw2, th2))
+        ws.add_image(xl2)
 
 # ==========================================
-# 5. 생성 및 다운로드 실행 (연속 다운로드 보장)
+# 3. 생성 및 다운로드 실행 (연속 다운로드 보장)
 # ==========================================
 st.divider()
 btn_label = f"🚀 [공사 사진대장] 생성하기" if task_type == "공사" else f"🚀 [점검 보고서 & 사진대장] 생성하기"
@@ -696,25 +853,17 @@ if st.button(btn_label, use_container_width=True):
                         get_safe_cell(ws_photo, 16, 9).value = f"4. 작업인원 : {workers}"
 
                     ITEM_LAYOUTS = [
-                        {"base": 27, "desc": 37, "end_row": 38},
-                        {"base": 39, "desc": 49, "end_row": 50},
-                        {"base": 52, "desc": 62, "end_row": 63},
-                        {"base": 64, "desc": 74, "end_row": 75},
-                        {"base": 77, "desc": 87, "end_row": 88},
-                        {"base": 89, "desc": 99, "end_row": 100},
-                        {"base": 102, "desc": 112, "end_row": 113},
-                        {"base": 114, "desc": 124, "end_row": 125},
-                        {"base": 127, "desc": 137, "end_row": 138},
-                        {"base": 139, "desc": 149, "end_row": 150}
+                        {"base": 27, "desc": 37, "end_row": 38}, # NO 1
+                        {"base": 39, "desc": 49, "end_row": 50}, # NO 2
+                        {"base": 52, "desc": 62, "end_row": 63}, # NO 3
+                        {"base": 64, "desc": 74, "end_row": 75}, # NO 4
+                        {"base": 77, "desc": 87, "end_row": 88}, # NO 5
+                        {"base": 89, "desc": 99, "end_row": 100},# NO 6
+                        {"base": 102, "desc": 112, "end_row": 113},# NO 7
+                        {"base": 114, "desc": 124, "end_row": 125},# NO 8
+                        {"base": 127, "desc": 137, "end_row": 138},# NO 9
+                        {"base": 139, "desc": 149, "end_row": 150} # NO 10
                     ]
-                    
-                    EMU_5MM = 180000
-                    EMU_2_5MM = 90000
-                    
-                    # 템플릿 실측 프레임 크기 (D:H 및 I:M 각 약 440px x 240px)
-                    BOX_FULL_W_PX = 440
-                    BOX_HALF_W_PX = 210
-                    BOX_H_PX = 240
 
                     if task_type == "공사":
                         num_items = len(photo_upload_data)
@@ -725,43 +874,32 @@ if st.button(btn_label, use_container_width=True):
                             desc_r = layout["desc"]
                             row_start_idx = base_r - 1
 
+                            # NO 번호 & 공사작업 내역 (B:C 병합)
                             get_safe_cell(ws_photo, base_r, 1).value = item["no"]
-                            title_cell = get_safe_cell(ws_photo, base_r, 2)
-                            title_cell.value = item["title"]
-                            title_cell.font = Font(name='돋움체', size=14, bold=True)
-                            title_cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+                            style_merged_range(ws_photo, 2, base_r, 3, layout["end_row"],
+                                               value=item["title"],
+                                               font=Font(name='돋움체', size=14, bold=True),
+                                               alignment=Alignment(horizontal='center', vertical='center', wrap_text=True))
 
-                            d_l = get_safe_cell(ws_photo, desc_r, 4)
-                            d_l.value = item["d_left"]
-                            d_l.font = Font(name='돋움체', size=14)
-                            d_l.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+                            # 좌측 사진 (D:H, 1~2장) 및 좌측 설명 (D37:H38 병합 14pt)
+                            add_scaled_photo_to_slot(ws_photo, item["photos_l"], base_col=3, base_row=row_start_idx)
+                            style_merged_range(ws_photo, 4, desc_r, 8, desc_r + 1,
+                                               value=item["d_left"],
+                                               font=Font(name='돋움체', size=14, bold=True),
+                                               alignment=Alignment(horizontal='center', vertical='center', wrap_text=True))
 
-                            d_r = get_safe_cell(ws_photo, desc_r, 9)
-                            d_r.value = item["d_right"]
-                            d_r.font = Font(name='돋움체', size=14)
-                            d_r.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+                            # 우측 사진 (I:M, 1~2장) 및 우측 설명 (I37:M38 병합 14pt)
+                            add_scaled_photo_to_slot(ws_photo, item["photos_r"], base_col=8, base_row=row_start_idx)
+                            style_merged_range(ws_photo, 9, desc_r, 13, desc_r + 1,
+                                               value=item["d_right"],
+                                               font=Font(name='돋움체', size=14, bold=True),
+                                               alignment=Alignment(horizontal='center', vertical='center', wrap_text=True))
 
-                            # 좌측 사진 (D:H)
-                            pl_list = item["photos_l"]
-                            if len(pl_list) == 1:
-                                add_scaled_photo(ws_photo, pl_list[0], col_idx=3, row_idx=row_start_idx, max_w_px=BOX_FULL_W_PX, max_h_px=BOX_H_PX, offset_x_emu=EMU_5MM, offset_y_emu=EMU_5MM)
-                            elif len(pl_list) >= 2:
-                                add_scaled_photo(ws_photo, pl_list[0], col_idx=3, row_idx=row_start_idx, max_w_px=BOX_HALF_W_PX, max_h_px=BOX_H_PX, offset_x_emu=EMU_5MM, offset_y_emu=EMU_5MM)
-                                add_scaled_photo(ws_photo, pl_list[1], col_idx=5, row_idx=row_start_idx, max_w_px=BOX_HALF_W_PX, max_h_px=BOX_H_PX, offset_x_emu=EMU_2_5MM, offset_y_emu=EMU_5MM)
-
-                            # 우측 사진 (I:M)
-                            pr_list = item["photos_r"]
-                            if len(pr_list) == 1:
-                                add_scaled_photo(ws_photo, pr_list[0], col_idx=8, row_idx=row_start_idx, max_w_px=BOX_FULL_W_PX, max_h_px=BOX_H_PX, offset_x_emu=EMU_5MM, offset_y_emu=EMU_5MM)
-                            elif len(pr_list) >= 2:
-                                add_scaled_photo(ws_photo, pr_list[0], col_idx=8, row_idx=row_start_idx, max_w_px=BOX_HALF_W_PX, max_h_px=BOX_H_PX, offset_x_emu=EMU_5MM, offset_y_emu=EMU_5MM)
-                                add_scaled_photo(ws_photo, pr_list[1], col_idx=10, row_idx=row_start_idx, max_w_px=BOX_HALF_W_PX, max_h_px=BOX_H_PX, offset_x_emu=EMU_2_5MM, offset_y_emu=EMU_5MM)
-
+                        # 미사용 하단 템플릿 행 삭제
                         last_keep_row = ITEM_LAYOUTS[min(num_items - 1, len(ITEM_LAYOUTS) - 1)]["end_row"]
                         ranges_to_remove = [mr for mr in list(ws_photo.merged_cells.ranges) if mr.min_row > last_keep_row]
                         for mr in ranges_to_remove:
                             ws_photo.merged_cells.ranges.remove(mr)
-                            
                         for r_del in range(last_keep_row + 1, ws_photo.max_row + 1):
                             for c_del in range(1, ws_photo.max_column + 1):
                                 cell = ws_photo.cell(row=r_del, column=c_del)
@@ -773,41 +911,51 @@ if st.button(btn_label, use_container_width=True):
                             ws_photo.delete_rows(last_keep_row + 1, ws_photo.max_row - last_keep_row)
 
                     else:
-                        # 점검 모드 사진대장 (작업사항 및 점검내용 매핑)
+                        # 점검 모드 사진대장: 2개씩 짝지어 좌측 칸 / 우측 칸에 배치
                         valid_items = [x for x in photo_upload_data if (x.get("photos") and len(x["photos"]) > 0) or (x.get("desc") and x["desc"].strip())]
+                        num_pairs = (len(valid_items) + 1) // 2
 
-                        for idx, item in enumerate(valid_items):
-                            if idx >= len(ITEM_LAYOUTS): break
-                            layout = ITEM_LAYOUTS[idx]
+                        for pair_idx in range(num_pairs):
+                            if pair_idx >= len(ITEM_LAYOUTS): break
+                            layout = ITEM_LAYOUTS[pair_idx]
                             base_r = layout["base"]
                             desc_r = layout["desc"]
                             row_start_idx = base_r - 1
 
+                            item_left = valid_items[pair_idx * 2]
+                            item_right = valid_items[pair_idx * 2 + 1] if (pair_idx * 2 + 1) < len(valid_items) else None
+
                             # 1) NO 번호
-                            get_safe_cell(ws_photo, base_r, 1).value = idx + 1
+                            get_safe_cell(ws_photo, base_r, 1).value = pair_idx + 1
                             
-                            # 2) 작업사항(B:C열) -> 설비 구간명 (예: S/C CARRIAGE부 점검, CONVEYOR 점검)
-                            sec_cell = get_safe_cell(ws_photo, base_r, 2)
-                            sec_cell.value = item["section"]
-                            sec_cell.font = Font(name='돋움체', size=14, bold=True)
-                            sec_cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+                            # 2) 작업사항(B:C열 병합) -> 설비 구간명 (예: S/C CARRIAGE부 점검)
+                            style_merged_range(ws_photo, 2, base_r, 3, layout["end_row"],
+                                               value=item_left["section"],
+                                               font=Font(name='돋움체', size=14, bold=True),
+                                               alignment=Alignment(horizontal='center', vertical='center', wrap_text=True))
 
-                            # 3) 점검 내용 (D37:H38 빈칸에 기입)
-                            d_cell = get_safe_cell(ws_photo, desc_r, 4)
-                            d_cell.value = item["desc"]
-                            d_cell.font = Font(name='돋움체', size=14)
-                            d_cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+                            # 3) 좌측 슬롯 (D27:H36 사진 + D37:H38 설명)
+                            add_scaled_photo_to_slot(ws_photo, item_left.get("photos", []), base_col=3, base_row=row_start_idx)
+                            style_merged_range(ws_photo, 4, desc_r, 8, desc_r + 1,
+                                               value=item_left.get("desc", ""),
+                                               font=Font(name='돋움체', size=14, bold=True),
+                                               alignment=Alignment(horizontal='center', vertical='center', wrap_text=True))
 
-                            # 4) 사진 배치 (D27:H36 박스 안에서 1장이면 전체, 2장이면 5:5 분할)
-                            p_list = item.get("photos", [])
-                            if len(p_list) == 1:
-                                add_scaled_photo(ws_photo, p_list[0], col_idx=3, row_idx=row_start_idx, max_w_px=BOX_FULL_W_PX, max_h_px=BOX_H_PX, offset_x_emu=EMU_5MM, offset_y_emu=EMU_5MM)
-                            elif len(p_list) >= 2:
-                                add_scaled_photo(ws_photo, p_list[0], col_idx=3, row_idx=row_start_idx, max_w_px=BOX_HALF_W_PX, max_h_px=BOX_H_PX, offset_x_emu=EMU_5MM, offset_y_emu=EMU_5MM)
-                                add_scaled_photo(ws_photo, p_list[1], col_idx=5, row_idx=row_start_idx, max_w_px=BOX_HALF_W_PX, max_h_px=BOX_H_PX, offset_x_emu=EMU_2_5MM, offset_y_emu=EMU_5MM)
+                            # 4) 우측 슬롯 (I27:M36 사진 + I37:M38 설명)
+                            if item_right:
+                                add_scaled_photo_to_slot(ws_photo, item_right.get("photos", []), base_col=8, base_row=row_start_idx)
+                                style_merged_range(ws_photo, 9, desc_r, 13, desc_r + 1,
+                                                   value=item_right.get("desc", ""),
+                                                   font=Font(name='돋움체', size=14, bold=True),
+                                                   alignment=Alignment(horizontal='center', vertical='center', wrap_text=True))
+                            else:
+                                style_merged_range(ws_photo, 9, desc_r, 13, desc_r + 1,
+                                                   value="",
+                                                   font=Font(name='돋움체', size=14),
+                                                   alignment=Alignment(horizontal='center', vertical='center', wrap_text=True))
 
-                        if valid_items:
-                            last_keep_row = ITEM_LAYOUTS[min(len(valid_items) - 1, len(ITEM_LAYOUTS) - 1)]["end_row"]
+                        if num_pairs > 0:
+                            last_keep_row = ITEM_LAYOUTS[min(num_pairs - 1, len(ITEM_LAYOUTS) - 1)]["end_row"]
                             ranges_to_remove = [mr for mr in list(ws_photo.merged_cells.ranges) if mr.min_row > last_keep_row]
                             for mr in ranges_to_remove:
                                 ws_photo.merged_cells.ranges.remove(mr)
@@ -825,7 +973,7 @@ if st.button(btn_label, use_container_width=True):
                     wb_photo.save(output_photo)
                     output_photo.seek(0)
 
-                # 💡 세션에 파일 데이터를 안전하게 보관하여 Rerun 시에도 다운로드 버튼 유지
+                # 세션에 저장하여 연속 다운로드 지원
                 st.session_state["gen_task_type"] = task_type
                 st.session_state["gen_report_bytes"] = output_report.getvalue() if output_report else None
                 st.session_state["gen_report_name"] = f"(MXR_점검보고서){site_name}_{date_tag}.xlsx"
@@ -838,10 +986,10 @@ if st.button(btn_label, use_container_width=True):
                 st.error(f"오류가 발생했습니다: {e}")
 
 # ==========================================
-# 6. 생성 완료 후 다운로드 영역 (연속 다운로드 지원)
+# 4. 다운로드 영역 (항상 유지)
 # ==========================================
 if st.session_state.get("has_generated"):
-    st.success("🎉 작성이 완료되었습니다! 원하는 보고서를 다운로드하세요.")
+    st.success("🎉 작성이 완료되었습니다! 원하는 보고서를 연속해서 다운로드하세요.")
     cur_task = st.session_state.get("gen_task_type", "점검")
     
     if cur_task == "공사":
