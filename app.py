@@ -4,13 +4,25 @@ from openpyxl.styles import Font, Alignment, Border, PatternFill, Side
 from openpyxl.drawing.image import Image
 from openpyxl.drawing.spreadsheet_drawing import TwoCellAnchor, AnchorMarker
 from openpyxl.worksheet.pagebreak import RowBreak, Break
+from openpyxl.packaging import manifest
 from PIL import Image as PILImage
+import mimetypes
 import io
 import re
 import json
 import os
 from copy import copy
 from datetime import datetime
+
+# 💡 스마트폰 전용 .mpo 포맷으로 인한 openpyxl 저장 에러 원천 차단
+mimetypes.types_map['.mpo'] = 'image/jpeg'
+mimetypes.common_types['.mpo'] = 'image/jpeg'
+if hasattr(manifest, 'mimetypes') and hasattr(manifest.mimetypes, 'types_map'):
+    try:
+        manifest.mimetypes.types_map[True]['.mpo'] = 'image/jpeg'
+        manifest.mimetypes.types_map[False]['.mpo'] = 'image/jpeg'
+    except:
+        pass
 
 st.set_page_config(page_title="자동창고 보고서 생성기", layout="wide")
 st.title("📝 현장 보고서 자동 생성기")
@@ -405,7 +417,7 @@ with main_tab_input:
                         for p_i, p_f in enumerate(photos_r[:2]):
                             with sub_cols_r[p_i]:
                                 try:
-                                    im_r = PILImage.open(p_f)
+                                    im_r = PILImage.open(p_r)
                                     st.image(im_r, use_container_width=True)
                                     p_r.seek(0)
                                 except:
@@ -681,13 +693,23 @@ def write_equipment_block(ws, defaults, user_lines, row_idx, copied_pages):
     return row_idx
 
 # ==========================================
-# 💡 핵심: 셀 안에 사진을 딱 맞추어 넣는 TwoCellAnchor 함수
+# 💡 핵심: 스마트폰 사진을 표준 PNG로 변환하고 포맷을 'png'로 고정
 # ==========================================
+def load_clean_image(file_obj):
+    file_obj.seek(0)
+    pil_img = PILImage.open(file_obj)
+    if pil_img.mode not in ('RGB', 'RGBA'):
+        pil_img = pil_img.convert('RGB')
+    buf = io.BytesIO()
+    pil_img.save(buf, format='PNG')
+    buf.seek(0)
+    xl = Image(buf)
+    xl.format = 'png'
+    return xl
+
 def add_scaled_photo_to_slot(ws, photos, is_left_slot, base_row):
     """
-    is_left_slot: True면 D~H열(좌측), False면 I~M열(우측)
-    base_row: 시작 행 (0-indexed, 26은 27행)
-    TwoCellAnchor를 사용해 해당 셀 박스 영역 안에 사진을 딱 맞추어 고정
+    TwoCellAnchor를 사용해 지정된 셀 박스 안에 사진을 가두어 배치
     """
     if not photos:
         return
@@ -696,37 +718,29 @@ def add_scaled_photo_to_slot(ws, photos, is_left_slot, base_row):
     end_c = 7 if is_left_slot else 12
     mid_c = 5 if is_left_slot else 10
     
-    pad_c = 100000     # 좌측 여백
-    end_c_off = 800000 # 우측 여백 (열 끝을 넘지 않음)
-    pad_r = 100000     # 상단 여백
-    end_r_off = 150000 # 하단 여백 (37행 텍스트를 침범하지 않음)
+    pad_c = 100000     # 좌측 내부 여백
+    end_c_off = 800000 # 우측 내부 여백 (열 끝을 넘지 않음)
+    pad_r = 100000     # 상단 내부 여백
+    end_r_off = 150000 # 하단 내부 여백 (37행 텍스트 침범 방지)
     end_r = base_row + 9 # 10개 행 (27행부터 36행까지)
     
     if len(photos) == 1:
-        # 단일 사진: 5개 열 범위 전체에 맞추어 배치
-        p = photos[0]
-        p.seek(0)
-        xl = Image(p)
+        xl = load_clean_image(photos[0])
         from_marker = AnchorMarker(col=start_c, colOff=pad_c, row=base_row, rowOff=pad_r)
         to_marker = AnchorMarker(col=end_c, colOff=end_c_off, row=end_r, rowOff=end_r_off)
         xl.anchor = TwoCellAnchor(_from=from_marker, to=to_marker, editAs="twoCell")
         ws.add_image(xl)
         
     elif len(photos) >= 2:
-        # 2장 사진: 좌/우 절반 영역에 각각 맞추어 배치
-        # 1번 사진 (좌측 절반: start_c ~ mid_c)
-        p1 = photos[0]
-        p1.seek(0)
-        xl1 = Image(p1)
+        # 1번 사진 (좌측 절반)
+        xl1 = load_clean_image(photos[0])
         from1 = AnchorMarker(col=start_c, colOff=pad_c, row=base_row, rowOff=pad_r)
         to1 = AnchorMarker(col=mid_c, colOff=400000, row=end_r, rowOff=end_r_off)
         xl1.anchor = TwoCellAnchor(_from=from1, to=to1, editAs="twoCell")
         ws.add_image(xl1)
         
-        # 2번 사진 (우측 절반: mid_c ~ end_c)
-        p2 = photos[1]
-        p2.seek(0)
-        xl2 = Image(p2)
+        # 2번 사진 (우측 절반)
+        xl2 = load_clean_image(photos[1])
         from2 = AnchorMarker(col=mid_c, colOff=500000, row=base_row, rowOff=pad_r)
         to2 = AnchorMarker(col=end_c, colOff=end_c_off, row=end_r, rowOff=end_r_off)
         xl2.anchor = TwoCellAnchor(_from=from2, to=to2, editAs="twoCell")
