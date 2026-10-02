@@ -4,6 +4,7 @@ from openpyxl.styles import Font, Alignment, Border, PatternFill, Side
 from openpyxl.drawing.image import Image
 from openpyxl.drawing.spreadsheet_drawing import OneCellAnchor, AnchorMarker
 from openpyxl.drawing.xdr import XDRPositiveSize2D
+from openpyxl.worksheet.pagebreak import Break
 from PIL import Image as PILImage
 import io
 import re
@@ -605,10 +606,6 @@ def sort_rules(text):
     return (is_need_replace, ho_number)
 
 def format_inspection_text(text):
-    """
-    1. 소문자 영문 단어 및 약어(c.f 등) 모두 대문자로 변환
-    2. SC/S/C 및 호기 표기를 'S/C #?호기'로 표준화
-    """
     text = re.sub(r'[a-zA-Z]+(?:\.[a-zA-Z]+)*', lambda m: m.group(0).upper(), text)
     text = re.sub(r'(?:S/C|SC)\s*#?(\d+)호기', r'S/C #\1호기', text)
     return text
@@ -655,11 +652,9 @@ def write_equipment_block(ws, defaults, user_lines, row_idx, copied_pages):
         row_idx = current_page * 38 + 12
 
     lines_to_write = []
-    # 1. 공통 점검사항 (1. 및 1) ~ 6))
     for i, df_text in enumerate(defaults):
         lines_to_write.append((df_text, i == 0, "000000", 'left'))
 
-    # 2. 사용자가 추가한 개별 점검/조치 내역 (2.부터 시작, 대문자 및 S/C #?호기 적용)
     for idx, text in enumerate(user_lines):
         color, bold = "000000", False
         if "교체 필요" in text:
@@ -710,7 +705,6 @@ def get_normalized_marker(start_col, start_row, offset_x_emu, offset_y_emu):
     return AnchorMarker(col=c, colOff=int(rem_x), row=r, rowOff=int(rem_y))
 
 def get_filled_image_bytes(file_obj, target_w_px, target_h_px):
-    """지정된 픽셀 규격에 맞춰 비율을 유지하며 꽉 차게 중앙 크롭(Center-Fill)"""
     file_obj.seek(0)
     pil_img = PILImage.open(file_obj)
     orig_w, orig_h = pil_img.size
@@ -730,9 +724,6 @@ def get_filled_image_bytes(file_obj, target_w_px, target_h_px):
     return buf
 
 def add_scaled_photo_to_slot(ws, photos, base_col, base_row):
-    """
-    한 슬롯(가로 5개 열, 세로 10개 행)에 사진 1장 또는 2장을 칸에 꽉 차게 채워 배치
-    """
     if not photos:
         return
         
@@ -756,14 +747,12 @@ def add_scaled_photo_to_slot(ws, photos, base_col, base_row):
         half_w = int((TOTAL_W - (3 * EMU_5MM)) / 2)
         half_w_px = int(half_w / 9525)
         
-        # 1번 사진 (좌측 절반)
         buf1 = get_filled_image_bytes(photos[0], half_w_px, target_h_px)
         xl1 = Image(buf1)
         xl1.anchor = OneCellAnchor(_from=get_normalized_marker(base_col, base_row, EMU_5MM, EMU_5MM), 
                                    ext=XDRPositiveSize2D(half_w, usable_h))
         ws.add_image(xl1)
         
-        # 2번 사진 (우측 절반)
         off_x2 = EMU_5MM + half_w + EMU_5MM
         buf2 = get_filled_image_bytes(photos[1], half_w_px, target_h_px)
         xl2 = Image(buf2)
@@ -798,7 +787,7 @@ if st.button(btn_label, use_container_width=True):
                 output_photo = None
 
                 # --------------------------------------------------
-                # A. 점검 보고서 생성 (미선택 설비 및 불필요한 2장 완전 삭제)
+                # A. 점검 보고서 생성 (미선택 설비, 잔여 로고, 인쇄 초과 완벽 제거)
                 # --------------------------------------------------
                 if task_type == "점검":
                     template_filename = "template_mxr_점검_블루원.xlsx"
@@ -814,7 +803,6 @@ if st.button(btn_label, use_container_width=True):
                     get_safe_cell(ws_report, 6, 8).value = author
                     get_safe_cell(ws_report, 10, 9).value = workers
 
-                    # 기존 내용 초기화
                     for r in range(12, 38):
                         cell = get_safe_cell(ws_report, r, 2)
                         cell.value = None
@@ -835,7 +823,6 @@ if st.button(btn_label, use_container_width=True):
                         else: sc_lines.append(line)
 
                     current_row = 12
-                    # 💡 선택된 설비만 차례대로 작성 (미선택 설비는 일체 미작성)
                     if "STACKER CRANE" in equipments:
                         current_row = write_equipment_block(ws_report, DEFAULT_TEXTS["STACKER CRANE"], sc_lines, current_row, copied_pages)
                     if "CONVEYOR" in equipments:
@@ -845,20 +832,33 @@ if st.button(btn_label, use_container_width=True):
                     if "LIFT" in equipments:
                         current_row = write_equipment_block(ws_report, DEFAULT_TEXTS["LIFT"], lift_lines, current_row, copied_pages)
 
-                    # 💡 실제 작성된 페이지만 남기고 2페이지 이후의 불필요한 행과 더미 내용 완전 삭제!
                     actual_pages = (current_row - 2) // 38 + 1
                     last_keep_row = actual_pages * 38
 
-                    # 마지막 페이지 작성 끝 줄부터 37행 사이의 빈 줄 잔여 텍스트 정리
+                    # 1) 마지막 페이지 잔여 빈 줄 정리
                     for r_blank in range(current_row, last_keep_row):
                         cell = get_safe_cell(ws_report, r_blank, 2)
                         cell.value = None
 
-                    # 실제 페이지를 초과하는 뒷페이지(2장 이후) 완전 삭제
+                    # 2) 2페이지 초과 잔여 병합 영역 제거
                     ranges_to_remove = [mr for mr in list(ws_report.merged_cells.ranges) if mr.min_row > last_keep_row]
                     for mr in ranges_to_remove:
                         ws_report.merged_cells.ranges.remove(mr)
 
+                    # 3) 💡 핵심: 38줄 초과 영역에 떠 있는 블루원 로고 이미지 완전 제거
+                    kept_images = []
+                    for img in getattr(ws_report, '_images', []):
+                        r_anchor = None
+                        if hasattr(img.anchor, '_from') and hasattr(img.anchor._from, 'row'):
+                            r_anchor = img.anchor._from.row + 1
+                        elif hasattr(img.anchor, 'row'):
+                            r_anchor = img.anchor.row + 1
+                        
+                        if r_anchor is None or r_anchor <= last_keep_row:
+                            kept_images.append(img)
+                    ws_report._images = kept_images
+
+                    # 4) 초과 행 완전 삭제
                     for r_del in range(last_keep_row + 1, ws_report.max_row + 1):
                         for c_del in range(1, ws_report.max_column + 1):
                             cell = ws_report.cell(row=r_del, column=c_del)
@@ -869,6 +869,13 @@ if st.button(btn_label, use_container_width=True):
 
                     if ws_report.max_row > last_keep_row:
                         ws_report.delete_rows(last_keep_row + 1, ws_report.max_row - last_keep_row)
+
+                    # 5) 💡 핵심: 38줄에 딱 맞춰 인쇄 영역 강제 고정 및 페이지 구분선 초기화
+                    ws_report.print_area = f"A1:K{last_keep_row}"
+                    if hasattr(ws_report, 'row_breaks') and ws_report.row_breaks:
+                        ws_report.row_breaks.clear()
+                    for p_i in range(1, actual_pages):
+                        ws_report.row_breaks.append(Break(id=p_i * 38))
 
                     output_report = io.BytesIO()
                     wb_report.save(output_report)
