@@ -529,7 +529,6 @@ with main_tab_preview:
                                 st.image(PILImage.open(p_file), use_container_width=True)
                     st.info(f"**설명:** {item['d_right'] if item['d_right'] else '(설명 없음)'}")
     else:
-        # 점검 모드: 좌/우 2개씩 짝지어 미리보기
         valid_items_pv = [x for x in photo_upload_data if (x.get("photos") and len(x["photos"]) > 0) or (x.get("desc") and x["desc"].strip())]
         if not valid_items_pv:
             st.caption("등록된 점검 사진 및 내용이 없습니다. '데이터 입력' 탭에서 입력해주세요.")
@@ -677,52 +676,69 @@ def write_equipment_block(ws, defaults, user_lines, row_idx, copied_pages):
     return row_idx
 
 # ==========================================
-# 💡 비율 유지 무자름 스케일링 앵커 함수
+# 💡 핵심: 정규화 좌표 앵커 함수 (테두리 탈출 방지)
 # ==========================================
+COL_W_EMU = 914400   # 열 너비 13.0의 EMU (96px * 9525)
+ROW_H_EMU = 247650   # 행 높이 19.5pt의 EMU (19.5 * 12700)
+EMU_5MM   = 180000   # 5mm 여백 (EMU)
+
+def get_normalized_marker(start_col, start_row, offset_x_emu, offset_y_emu):
+    c = start_col
+    rem_x = offset_x_emu
+    while rem_x >= COL_W_EMU:
+        rem_x -= COL_W_EMU
+        c += 1
+        
+    r = start_row
+    rem_y = offset_y_emu
+    while rem_y >= ROW_H_EMU:
+        rem_y -= ROW_H_EMU
+        r += 1
+        
+    return AnchorMarker(col=c, colOff=int(rem_x), row=r, rowOff=int(rem_y))
+
 def add_scaled_photo_to_slot(ws, photos, base_col, base_row):
     """
-    한 슬롯(가로 5개 컬럼, 세로 10개 행)에 사진 1장 또는 2장을 비율 유지하여 사방 5mm 여백 두고 배치
+    한 슬롯(가로 5개 열, 세로 10개 행)에 사진 1장 또는 2장을 비율 유지하여 
+    정확히 정규화된 앵커 좌표로 사방 5mm 여백 두고 배치
     """
     if not photos:
         return
         
-    TOTAL_W_EMU = 4881560 # 5개 열(너비 13) 전체 폭
-    TOTAL_H_EMU = 2476500 # 10개 행(높이 19.5pt) 전체 높이
-    EMU_5MM = 180000     # 5mm 여백
+    TOTAL_W = 5 * COL_W_EMU
+    TOTAL_H = 10 * ROW_H_EMU
+    usable_h = TOTAL_H - (2 * EMU_5MM)
     
     if len(photos) == 1:
-        # 1장일 때: 해당 칸 전체 폭에 꽉 차게 중앙 정렬
-        p_file = photos[0]
-        p_file.seek(0)
-        pil_img = PILImage.open(p_file)
-        orig_w, orig_h = pil_img.size
+        usable_w = TOTAL_W - (2 * EMU_5MM)
+        p = photos[0]
+        p.seek(0)
+        im = PILImage.open(p)
+        w, h = im.size
         
-        usable_w = TOTAL_W_EMU - (2 * EMU_5MM)
-        usable_h = TOTAL_H_EMU - (2 * EMU_5MM)
+        ratio = min(usable_w / w, usable_h / h)
+        tw = int(w * ratio)
+        th = int(h * ratio)
         
-        ratio = min(usable_w / orig_w, usable_h / orig_h)
-        tw = int(orig_w * ratio)
-        th = int(orig_h * ratio)
+        # 가로/세로 정확한 정중앙 오프셋 계산
+        off_x = EMU_5MM + int((usable_w - tw) / 2)
+        off_y = EMU_5MM + int((usable_h - th) / 2)
         
-        offset_x = EMU_5MM + int((usable_w - tw) / 2)
-        offset_y = EMU_5MM + int((usable_h - th) / 2)
+        b = io.BytesIO()
+        im.save(b, format='PNG')
+        b.seek(0)
+        xl = Image(b)
         
-        b_arr = io.BytesIO()
-        pil_img.save(b_arr, format='PNG')
-        b_arr.seek(0)
-        xl_img = Image(b_arr)
-        
-        marker = AnchorMarker(col=base_col, colOff=offset_x, row=base_row, rowOff=offset_y)
-        size = XDRPositiveSize2D(tw, th)
-        xl_img.anchor = OneCellAnchor(_from=marker, ext=size)
-        ws.add_image(xl_img)
+        # 💡 정규화 마커 적용 (절대 열 폭 초과 안함)
+        marker = get_normalized_marker(base_col, base_row, off_x, off_y)
+        xl.anchor = OneCellAnchor(_from=marker, ext=XDRPositiveSize2D(tw, th))
+        ws.add_image(xl)
         
     elif len(photos) >= 2:
-        # 2장일 때: 해당 칸 내부에서 5:5 좌우 분할 (중앙 5mm 간격)
-        usable_h = TOTAL_H_EMU - (2 * EMU_5MM)
-        half_w = int((TOTAL_W_EMU - (3 * EMU_5MM)) / 2)
+        # 2장일 때: 슬롯 내부 5:5 좌우 분할 (가운데 5mm 간격)
+        half_w = int((TOTAL_W - (3 * EMU_5MM)) / 2)
         
-        # 1번 사진 (좌측)
+        # 1번 사진 (좌측 절반의 중앙)
         p1 = photos[0]
         p1.seek(0)
         im1 = PILImage.open(p1)
@@ -736,10 +752,10 @@ def add_scaled_photo_to_slot(ws, photos, base_col, base_row):
         im1.save(b1, format='PNG')
         b1.seek(0)
         xl1 = Image(b1)
-        xl1.anchor = OneCellAnchor(_from=AnchorMarker(col=base_col, colOff=off_x1, row=base_row, rowOff=off_y1), ext=XDRPositiveSize2D(tw1, th1))
+        xl1.anchor = OneCellAnchor(_from=get_normalized_marker(base_col, base_row, off_x1, off_y1), ext=XDRPositiveSize2D(tw1, th1))
         ws.add_image(xl1)
         
-        # 2번 사진 (우측)
+        # 2번 사진 (우측 절반의 중앙)
         p2 = photos[1]
         p2.seek(0)
         im2 = PILImage.open(p2)
@@ -753,7 +769,7 @@ def add_scaled_photo_to_slot(ws, photos, base_col, base_row):
         im2.save(b2, format='PNG')
         b2.seek(0)
         xl2 = Image(b2)
-        xl2.anchor = OneCellAnchor(_from=AnchorMarker(col=base_col, colOff=off_x2, row=base_row, rowOff=off_y2), ext=XDRPositiveSize2D(tw2, th2))
+        xl2.anchor = OneCellAnchor(_from=get_normalized_marker(base_col, base_row, off_x2, off_y2), ext=XDRPositiveSize2D(tw2, th2))
         ws.add_image(xl2)
 
 # ==========================================
@@ -881,14 +897,14 @@ if st.button(btn_label, use_container_width=True):
                                                font=Font(name='돋움체', size=14, bold=True),
                                                alignment=Alignment(horizontal='center', vertical='center', wrap_text=True))
 
-                            # 좌측 사진 (D:H, 1~2장) 및 좌측 설명 (D37:H38 병합 14pt)
+                            # 좌측 사진 (D:H) & 좌측 설명 (D37:H38)
                             add_scaled_photo_to_slot(ws_photo, item["photos_l"], base_col=3, base_row=row_start_idx)
                             style_merged_range(ws_photo, 4, desc_r, 8, desc_r + 1,
                                                value=item["d_left"],
                                                font=Font(name='돋움체', size=14, bold=True),
                                                alignment=Alignment(horizontal='center', vertical='center', wrap_text=True))
 
-                            # 우측 사진 (I:M, 1~2장) 및 우측 설명 (I37:M38 병합 14pt)
+                            # 우측 사진 (I:M) & 우측 설명 (I37:M38)
                             add_scaled_photo_to_slot(ws_photo, item["photos_r"], base_col=8, base_row=row_start_idx)
                             style_merged_range(ws_photo, 9, desc_r, 13, desc_r + 1,
                                                value=item["d_right"],
@@ -911,7 +927,7 @@ if st.button(btn_label, use_container_width=True):
                             ws_photo.delete_rows(last_keep_row + 1, ws_photo.max_row - last_keep_row)
 
                     else:
-                        # 점검 모드 사진대장: 2개씩 짝지어 좌측 칸 / 우측 칸에 배치
+                        # 점검 모드 사진대장: 2개씩 짝지어 좌측 슬롯(D:H) / 우측 슬롯(I:M) 순차 배치
                         valid_items = [x for x in photo_upload_data if (x.get("photos") and len(x["photos"]) > 0) or (x.get("desc") and x["desc"].strip())]
                         num_pairs = (len(valid_items) + 1) // 2
 
@@ -973,7 +989,6 @@ if st.button(btn_label, use_container_width=True):
                     wb_photo.save(output_photo)
                     output_photo.seek(0)
 
-                # 세션에 저장하여 연속 다운로드 지원
                 st.session_state["gen_task_type"] = task_type
                 st.session_state["gen_report_bytes"] = output_report.getvalue() if output_report else None
                 st.session_state["gen_report_name"] = f"(MXR_점검보고서){site_name}_{date_tag}.xlsx"
@@ -1015,7 +1030,7 @@ if st.session_state.get("has_generated"):
         with c2:
             if st.session_state.get("gen_photo_bytes"):
                 st.download_button(
-                    label="🖼️ [MXR_점검사진대장] 다운로드",
+                    label="🖼️️ [MXR_점검사진대장] 다운로드",
                     data=st.session_state["gen_photo_bytes"],
                     file_name=st.session_state["gen_photo_name"],
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
