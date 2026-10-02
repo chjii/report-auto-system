@@ -76,36 +76,37 @@ BASE_SITE_DB = {
     "코오롱글로텍": {"vendor": "MXRobotics", "address": "충청남도 천안시", "equipments": ["STACKER CRANE", "CONVEYOR", "RGV"], "pm": "채우석"}
 }
 
+# 💡 하단 설명에서 번호를 제거한 깔끔한 표준 점검 명칭
 ALL_PARTS_CONFIG = {
     "STACKER CRANE": {
-        "S/C CARRIAGE부 점검": ["1) FORK C.F BEARING CLEANING", "2) FORK C.F BEARING GREASE 도포", "3) FORK CHAIN TENSION 확인", ""],
-        "S/C 주행부 점검": ["1) 주행 WHEEL 상태 확인", "2) 주행 GUIDE ROLLER 상태 확인", "3) 주행 MOTOR BRAKE GAP 확인", ""],
-        "S/C 승강부 점검": ["1) 외측 GUIDE ROLLER 상태 확인", "2) 내측 GUIDE ROLLER 상태 확인", "3) 승강 MOTOR BRAKE GAP 확인", ""],
-        "S/C 상부 점검": ["1) 상부 GUIDE ROLLER 상태 확인", "2) 상부 BRAKE ROLLER 상태 확인", "", ""],
-        "S/C 집전부 점검": ["1) 집전기 ROLLER 및 SHOE 상태 확인", "2) 집전기 CLEANING", "3) 기상반 PANEL 단자대 REBOLTING", "4) 각 SENSOR 단자대 REBOLTING"]
+        "S/C CARRIAGE부 점검": ["FORK C.F BEARING CLEANING", "FORK C.F BEARING GREASE 도포", "FORK CHAIN TENSION 확인", ""],
+        "S/C 주행부 점검": ["주행 WHEEL 상태 확인", "주행 GUIDE ROLLER 상태 확인", "주행 MOTOR BRAKE GAP 확인", ""],
+        "S/C 승강부 점검": ["외측 GUIDE ROLLER 상태 확인", "내측 GUIDE ROLLER 상태 확인", "승강 MOTOR BRAKE GAP 확인", ""],
+        "S/C 상부 점검": ["상부 GUIDE ROLLER 상태 확인", "상부 BRAKE ROLLER 상태 확인", "", ""],
+        "S/C 집전부 점검": ["집전기 ROLLER 및 SHOE 상태 확인", "집전기 CLEANING", "기상반 PANEL 단자대 REBOLTING", "각 SENSOR 단자대 REBOLTING"]
     },
     "CONVEYOR": {
         "CONVEYOR 점검": [
-            "1) 구동 MOTOR 및 감속기 상태 확인 (소음/누유/발열)",
-            "2) 구동 CHAIN 및 BELT TENSION 상태 확인",
-            "3) ROLLER 구름 상태 및 베어링 소음 확인",
-            "4) 광전/근접 SENSOR 취부 및 동작 상태 확인"
+            "구동 MOTOR 및 감속기 상태 확인 (소음/누유/발열)",
+            "구동 CHAIN 및 BELT TENSION 상태 확인",
+            "ROLLER 구름 상태 및 베어링 소음 확인",
+            "광전/근접 SENSOR 취부 및 동작 상태 확인"
         ]
     },
     "RGV": {
         "RGV 점검": [
-            "1) 주행 구동 MOTOR 및 감속기 상태 확인",
-            "2) 주행 WHEEL 및 GUIDE ROLLER 마모 상태 확인",
-            "3) 집전기(COLLECTOR) SHOE 마모 및 접촉 상태 확인",
-            "4) 광통신 장치 및 범퍼/장애물 센서 동작 확인"
+            "주행 구동 MOTOR 및 감속기 상태 확인",
+            "주행 WHEEL 및 GUIDE ROLLER 마모 상태 확인",
+            "집전기(COLLECTOR) SHOE 마모 및 접촉 상태 확인",
+            "광통신 장치 및 범퍼/장애물 센서 동작 확인"
         ]
     },
     "LIFT": {
         "LIFT 점검": [
-            "1) 승강 MOTOR 및 감속기 소음/발열, 누유 상태 점검",
-            "2) 승강 CHAIN 및 TENSION, 마모 상태 점검",
-            "3) GUIDE ROLLER 구름 상태 및 마모 상태 점검",
-            "4) 상/하한 리미트 센서 및 낙하 방지 장치 동작 점검"
+            "승강 MOTOR 및 감속기 소음/발열, 누유 상태 점검",
+            "승강 CHAIN 및 TENSION, 마모 상태 점검",
+            "GUIDE ROLLER 구름 상태 및 마모 상태 점검",
+            "상/하한 리미트 센서 및 낙하 방지 장치 동작 점검"
         ]
     }
 }
@@ -357,7 +358,7 @@ with main_tab_input:
     photo_upload_data = []
 
     if task_type == "공사":
-        st.caption("좌측 칸(작업 전)/우측 칸(작업 후) 각각 최대 2장까지 선택 가능합니다. 1장이면 전체 채움, 2장이면 5:5 분할 배치됩니다. (원본 비율 100% 유지)")
+        st.caption("좌측 칸(작업 전)/우측 칸(작업 후) 각각 최대 2장까지 선택 가능합니다. 1장이면 전체 채움, 2장이면 5:5 분할 배치됩니다.")
         
         if "const_items_count" not in st.session_state:
             st.session_state.const_items_count = 2
@@ -485,6 +486,12 @@ with main_tab_input:
 # ==========================================
 # 2. 👁️ 보고서 양식 미리보기 탭
 # ==========================================
+def clean_desc_text(text):
+    """설명 텍스트 앞에 붙은 1) 2) 등의 불필요한 번호 자동 제거"""
+    if not text:
+        return ""
+    return re.sub(r'^\s*\(?\d+\)?[\.\)\-\s]*', '', text).strip()
+
 with main_tab_preview:
     st.markdown(f"### 📋 {site_name} 자동화 창고 {task_type} 보고서 양식 미리보기")
     with st.container(border=True):
@@ -512,7 +519,7 @@ with main_tab_preview:
                             with sub_pvc[p_idx]:
                                 p_file.seek(0)
                                 st.image(PILImage.open(p_file), use_container_width=True)
-                    st.info(f"**설명:** {item['d_left'] if item['d_left'] else '(설명 없음)'}")
+                    st.info(f"**설명:** {clean_desc_text(item['d_left']) if item['d_left'] else '(설명 없음)'}")
                 with pv_c2:
                     st.caption("📷 [우측 칸 (작업 후)]")
                     if item["photos_r"]:
@@ -521,7 +528,7 @@ with main_tab_preview:
                             with sub_pvc[p_idx]:
                                 p_file.seek(0)
                                 st.image(PILImage.open(p_file), use_container_width=True)
-                    st.info(f"**설명:** {item['d_right'] if item['d_right'] else '(설명 없음)'}")
+                    st.info(f"**설명:** {clean_desc_text(item['d_right']) if item['d_right'] else '(설명 없음)'}")
     else:
         valid_items_pv = [x for x in photo_upload_data if (x.get("photos") and len(x["photos"]) > 0) or (x.get("desc") and x["desc"].strip())]
         if not valid_items_pv:
@@ -544,7 +551,7 @@ with main_tab_preview:
                                 with sub_pvc[p_idx]:
                                     p_file.seek(0)
                                     st.image(PILImage.open(p_file), use_container_width=True)
-                        st.info(f"**점검 내용:** {item_left['desc'] if item_left['desc'] else '(내용 없음)'}")
+                        st.info(f"**점검 내용:** {clean_desc_text(item_left['desc']) if item_left['desc'] else '(내용 없음)'}")
                     with pv_c2:
                         st.caption("📷 [우측 칸 - I27:M36]")
                         if item_right:
@@ -554,7 +561,7 @@ with main_tab_preview:
                                     with sub_pvc[p_idx]:
                                         p_file.seek(0)
                                         st.image(PILImage.open(p_file), use_container_width=True)
-                            st.info(f"**점검 내용:** {item_right['desc'] if item_right['desc'] else '(내용 없음)'}")
+                            st.info(f"**점검 내용:** {clean_desc_text(item_right['desc']) if item_right['desc'] else '(내용 없음)'}")
                         else:
                             st.caption("(우측 칸 비어있음)")
 
@@ -682,7 +689,7 @@ def write_equipment_block(ws, defaults, user_lines, row_idx, copied_pages):
     return row_idx
 
 # ==========================================
-# 💡 핵심: 정규화 좌표 앵커 함수 (테두리 탈출 방지)
+# 💡 핵심: 칸에 꽉 차게 채우는 이미지 앵커 함수
 # ==========================================
 COL_W_EMU = 914400   # 열 너비 13.0의 EMU (96px * 9525)
 ROW_H_EMU = 247650   # 행 높이 19.5pt의 EMU (19.5 * 12700)
@@ -703,10 +710,29 @@ def get_normalized_marker(start_col, start_row, offset_x_emu, offset_y_emu):
         
     return AnchorMarker(col=c, colOff=int(rem_x), row=r, rowOff=int(rem_y))
 
+def get_filled_image_bytes(file_obj, target_w_px, target_h_px):
+    """지정된 픽셀 규격에 맞춰 비율을 유지하며 꽉 차게 중앙 크롭(Center-Fill)"""
+    file_obj.seek(0)
+    pil_img = PILImage.open(file_obj)
+    orig_w, orig_h = pil_img.size
+    
+    ratio = max(target_w_px / orig_w, target_h_px / orig_h)
+    new_w = int(orig_w * ratio)
+    new_h = int(orig_h * ratio)
+    
+    resized = pil_img.resize((new_w, new_h), PILImage.Resampling.LANCZOS)
+    left = (new_w - target_w_px) // 2
+    top = (new_h - target_h_px) // 2
+    cropped = resized.crop((left, top, left + target_w_px, top + target_h_px))
+    
+    buf = io.BytesIO()
+    cropped.save(buf, format='PNG')
+    buf.seek(0)
+    return buf
+
 def add_scaled_photo_to_slot(ws, photos, base_col, base_row):
     """
-    한 슬롯(가로 5개 열, 세로 10개 행)에 사진 1장 또는 2장을 비율 유지하여 
-    정확히 정규화된 앵커 좌표로 사방 5mm 여백 두고 배치
+    한 슬롯(가로 5개 열, 세로 10개 행)에 사진 1장 또는 2장을 칸에 꽉 차게 채워 배치
     """
     if not photos:
         return
@@ -714,65 +740,37 @@ def add_scaled_photo_to_slot(ws, photos, base_col, base_row):
     TOTAL_W = 5 * COL_W_EMU
     TOTAL_H = 10 * ROW_H_EMU
     usable_h = TOTAL_H - (2 * EMU_5MM)
+    target_h_px = int(usable_h / 9525)
     
     if len(photos) == 1:
         usable_w = TOTAL_W - (2 * EMU_5MM)
-        p = photos[0]
-        p.seek(0)
-        im = PILImage.open(p)
-        w, h = im.size
+        target_w_px = int(usable_w / 9525)
         
-        ratio = min(usable_w / w, usable_h / h)
-        tw = int(w * ratio)
-        th = int(h * ratio)
+        # 칸에 꽉 차도록 중앙 채움 이미지 생성
+        img_buf = get_filled_image_bytes(photos[0], target_w_px, target_h_px)
+        xl = Image(img_buf)
         
-        off_x = EMU_5MM + int((usable_w - tw) / 2)
-        off_y = EMU_5MM + int((usable_h - th) / 2)
-        
-        b = io.BytesIO()
-        im.save(b, format='PNG')
-        b.seek(0)
-        xl = Image(b)
-        
-        marker = get_normalized_marker(base_col, base_row, off_x, off_y)
-        xl.anchor = OneCellAnchor(_from=marker, ext=XDRPositiveSize2D(tw, th))
+        marker = get_normalized_marker(base_col, base_row, EMU_5MM, EMU_5MM)
+        xl.anchor = OneCellAnchor(_from=marker, ext=XDRPositiveSize2D(int(usable_w), int(usable_h)))
         ws.add_image(xl)
         
     elif len(photos) >= 2:
         half_w = int((TOTAL_W - (3 * EMU_5MM)) / 2)
+        half_w_px = int(half_w / 9525)
         
-        # 1번 사진 (좌측 절반의 중앙)
-        p1 = photos[0]
-        p1.seek(0)
-        im1 = PILImage.open(p1)
-        w1, h1 = im1.size
-        r1 = min(half_w / w1, usable_h / h1)
-        tw1, th1 = int(w1 * r1), int(h1 * r1)
-        off_x1 = EMU_5MM + int((half_w - tw1) / 2)
-        off_y1 = EMU_5MM + int((usable_h - th1) / 2)
-        
-        b1 = io.BytesIO()
-        im1.save(b1, format='PNG')
-        b1.seek(0)
-        xl1 = Image(b1)
-        xl1.anchor = OneCellAnchor(_from=get_normalized_marker(base_col, base_row, off_x1, off_y1), ext=XDRPositiveSize2D(tw1, th1))
+        # 1번 사진 (좌측 절반에 꽉 차게)
+        buf1 = get_filled_image_bytes(photos[0], half_w_px, target_h_px)
+        xl1 = Image(buf1)
+        xl1.anchor = OneCellAnchor(_from=get_normalized_marker(base_col, base_row, EMU_5MM, EMU_5MM), 
+                                   ext=XDRPositiveSize2D(half_w, usable_h))
         ws.add_image(xl1)
         
-        # 2번 사진 (우측 절반의 중앙)
-        p2 = photos[1]
-        p2.seek(0)
-        im2 = PILImage.open(p2)
-        w2, h2 = im2.size
-        r2 = min(half_w / w2, usable_h / h2)
-        tw2, th2 = int(w2 * r2), int(h2 * r2)
-        off_x2 = EMU_5MM + half_w + EMU_5MM + int((half_w - tw2) / 2)
-        off_y2 = EMU_5MM + int((usable_h - th2) / 2)
-        
-        b2 = io.BytesIO()
-        im2.save(b2, format='PNG')
-        b2.seek(0)
-        xl2 = Image(b2)
-        xl2.anchor = OneCellAnchor(_from=get_normalized_marker(base_col, base_row, off_x2, off_y2), ext=XDRPositiveSize2D(tw2, th2))
+        # 2번 사진 (우측 절반에 꽉 차게)
+        off_x2 = EMU_5MM + half_w + EMU_5MM
+        buf2 = get_filled_image_bytes(photos[1], half_w_px, target_h_px)
+        xl2 = Image(buf2)
+        xl2.anchor = OneCellAnchor(_from=get_normalized_marker(base_col, base_row, off_x2, EMU_5MM), 
+                                   ext=XDRPositiveSize2D(half_w, usable_h))
         ws.add_image(xl2)
 
 # ==========================================
@@ -901,13 +899,13 @@ if st.button(btn_label, use_container_width=True):
 
                             add_scaled_photo_to_slot(ws_photo, item["photos_l"], base_col=3, base_row=row_start_idx)
                             style_merged_range(ws_photo, 4, desc_r, 8, desc_r + 1,
-                                               value=item["d_left"],
+                                               value=clean_desc_text(item["d_left"]),
                                                font=Font(name='돋움체', size=14, bold=True),
                                                alignment=Alignment(horizontal='center', vertical='center', wrap_text=True))
 
                             add_scaled_photo_to_slot(ws_photo, item["photos_r"], base_col=8, base_row=row_start_idx)
                             style_merged_range(ws_photo, 9, desc_r, 13, desc_r + 1,
-                                               value=item["d_right"],
+                                               value=clean_desc_text(item["d_right"]),
                                                font=Font(name='돋움체', size=14, bold=True),
                                                alignment=Alignment(horizontal='center', vertical='center', wrap_text=True))
 
@@ -946,16 +944,18 @@ if st.button(btn_label, use_container_width=True):
                                                font=Font(name='돋움체', size=14, bold=True),
                                                alignment=Alignment(horizontal='center', vertical='center', wrap_text=True))
 
+                            # 💡 좌측 슬롯 (D:H 채움 및 번호 없는 14pt 설명)
                             add_scaled_photo_to_slot(ws_photo, item_left.get("photos", []), base_col=3, base_row=row_start_idx)
                             style_merged_range(ws_photo, 4, desc_r, 8, desc_r + 1,
-                                               value=item_left.get("desc", ""),
+                                               value=clean_desc_text(item_left.get("desc", "")),
                                                font=Font(name='돋움체', size=14, bold=True),
                                                alignment=Alignment(horizontal='center', vertical='center', wrap_text=True))
 
+                            # 💡 우측 슬롯 (I:M 채움 및 번호 없는 14pt 설명)
                             if item_right:
                                 add_scaled_photo_to_slot(ws_photo, item_right.get("photos", []), base_col=8, base_row=row_start_idx)
                                 style_merged_range(ws_photo, 9, desc_r, 13, desc_r + 1,
-                                                   value=item_right.get("desc", ""),
+                                                   value=clean_desc_text(item_right.get("desc", "")),
                                                    font=Font(name='돋움체', size=14, bold=True),
                                                    alignment=Alignment(horizontal='center', vertical='center', wrap_text=True))
                             else:
