@@ -4,7 +4,7 @@ from openpyxl.styles import Font, Alignment, Border, PatternFill, Side
 from openpyxl.drawing.image import Image
 from openpyxl.drawing.spreadsheet_drawing import OneCellAnchor, AnchorMarker
 from openpyxl.drawing.xdr import XDRPositiveSize2D
-from openpyxl.worksheet.pagebreak import Break
+from openpyxl.worksheet.pagebreak import RowBreak, Break
 from PIL import Image as PILImage
 import io
 import re
@@ -195,7 +195,7 @@ saved_draft = load_full_draft()
 # ==========================================
 # 1. 탭 구성 (입력 탭 vs 미리보기 탭)
 # ==========================================
-main_tab_input, main_tab_preview = st.tabs(["✏️ 데이터 입력", "👁️ 보고서 양식 미리보기"])
+main_tab_input, main_tab_preview = st.tabs(["✏️️ 데이터 입력", "👁️ 보고서 양식 미리보기"])
 
 with main_tab_input:
     st.markdown("### 📋 작업 분류 선택")
@@ -487,7 +487,6 @@ with main_tab_input:
 # 2. 👁️ 보고서 양식 미리보기 탭
 # ==========================================
 def clean_desc_text(text):
-    """설명 텍스트 앞에 붙은 1) 2) 등의 불필요한 번호 자동 제거"""
     if not text:
         return ""
     return re.sub(r'^\s*\(?\d+\)?[\.\)\-\s]*', '', text).strip()
@@ -685,9 +684,9 @@ def write_equipment_block(ws, defaults, user_lines, row_idx, copied_pages):
 # ==========================================
 # 💡 핵심: 칸에 꽉 차게 채우는 이미지 앵커 함수
 # ==========================================
-COL_W_EMU = 914400   # 열 너비 13.0의 EMU (96px * 9525)
-ROW_H_EMU = 247650   # 행 높이 19.5pt의 EMU (19.5 * 12700)
-EMU_5MM   = 180000   # 5mm 여백 (EMU)
+COL_W_EMU = 914400
+ROW_H_EMU = 247650
+EMU_5MM   = 180000
 
 def get_normalized_marker(start_col, start_row, offset_x_emu, offset_y_emu):
     c = start_col
@@ -845,7 +844,7 @@ if st.button(btn_label, use_container_width=True):
                     for mr in ranges_to_remove:
                         ws_report.merged_cells.ranges.remove(mr)
 
-                    # 3) 💡 핵심: 38줄 초과 영역에 떠 있는 블루원 로고 이미지 완전 제거
+                    # 3) 38줄 초과 영역에 떠 있는 블루원 로고 이미지 완전 제거
                     kept_images = []
                     for img in getattr(ws_report, '_images', []):
                         r_anchor = None
@@ -870,10 +869,9 @@ if st.button(btn_label, use_container_width=True):
                     if ws_report.max_row > last_keep_row:
                         ws_report.delete_rows(last_keep_row + 1, ws_report.max_row - last_keep_row)
 
-                    # 5) 💡 핵심: 38줄에 딱 맞춰 인쇄 영역 강제 고정 및 페이지 구분선 초기화
+                    # 5) 38줄에 딱 맞춰 인쇄 영역 강제 고정 및 페이지 구분선 안전 초기화
                     ws_report.print_area = f"A1:K{last_keep_row}"
-                    if hasattr(ws_report, 'row_breaks') and ws_report.row_breaks:
-                        ws_report.row_breaks.clear()
+                    ws_report.row_breaks = RowBreak()
                     for p_i in range(1, actual_pages):
                         ws_report.row_breaks.append(Break(id=p_i * 38))
 
@@ -902,16 +900,16 @@ if st.button(btn_label, use_container_width=True):
                         get_safe_cell(ws_photo, 16, 9).value = f"4. 작업인원 : {workers}"
 
                     ITEM_LAYOUTS = [
-                        {"base": 27, "desc": 37, "end_row": 38}, # NO 1
-                        {"base": 39, "desc": 49, "end_row": 50}, # NO 2
-                        {"base": 52, "desc": 62, "end_row": 63}, # NO 3
-                        {"base": 64, "desc": 74, "end_row": 75}, # NO 4
-                        {"base": 77, "desc": 87, "end_row": 88}, # NO 5
-                        {"base": 89, "desc": 99, "end_row": 100},# NO 6
-                        {"base": 102, "desc": 112, "end_row": 113},# NO 7
-                        {"base": 114, "desc": 124, "end_row": 125},# NO 8
-                        {"base": 127, "desc": 137, "end_row": 138},# NO 9
-                        {"base": 139, "desc": 149, "end_row": 150} # NO 10
+                        {"base": 27, "desc": 37, "end_row": 38},
+                        {"base": 39, "desc": 49, "end_row": 50},
+                        {"base": 52, "desc": 62, "end_row": 63},
+                        {"base": 64, "desc": 74, "end_row": 75},
+                        {"base": 77, "desc": 87, "end_row": 88},
+                        {"base": 89, "desc": 99, "end_row": 100},
+                        {"base": 102, "desc": 112, "end_row": 113},
+                        {"base": 114, "desc": 124, "end_row": 125},
+                        {"base": 127, "desc": 137, "end_row": 138},
+                        {"base": 139, "desc": 149, "end_row": 150}
                     ]
 
                     if task_type == "공사":
