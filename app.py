@@ -2,8 +2,7 @@ import streamlit as st
 import openpyxl
 from openpyxl.styles import Font, Alignment, Border, PatternFill, Side
 from openpyxl.drawing.image import Image
-from openpyxl.drawing.spreadsheet_drawing import OneCellAnchor, AnchorMarker
-from openpyxl.drawing.xdr import XDRPositiveSize2D
+from openpyxl.drawing.spreadsheet_drawing import TwoCellAnchor, AnchorMarker
 from openpyxl.worksheet.pagebreak import RowBreak, Break
 from PIL import Image as PILImage
 import io
@@ -195,7 +194,7 @@ saved_draft = load_full_draft()
 # ==========================================
 # 1. 탭 구성 (입력 탭 vs 미리보기 탭)
 # ==========================================
-main_tab_input, main_tab_preview = st.tabs(["✏️️ 데이터 입력", "👁️ 보고서 양식 미리보기"])
+main_tab_input, main_tab_preview = st.tabs(["✏️ 데이터 입력", "👁️ 보고서 양식 미리보기"])
 
 with main_tab_input:
     st.markdown("### 📋 작업 분류 선택")
@@ -358,7 +357,7 @@ with main_tab_input:
     photo_upload_data = []
 
     if task_type == "공사":
-        st.caption("좌측 칸(작업 전)/우측 칸(작업 후) 각각 최대 2장까지 선택 가능합니다. 1장이면 전체 채움, 2장이면 5:5 분할 배치됩니다.")
+        st.caption("좌측 칸(작업 전)/우측 칸(작업 후) 각각 최대 2장까지 선택 가능합니다.")
         
         if "const_items_count" not in st.session_state:
             st.session_state.const_items_count = 2
@@ -406,7 +405,7 @@ with main_tab_input:
                         for p_i, p_f in enumerate(photos_r[:2]):
                             with sub_cols_r[p_i]:
                                 try:
-                                    im_r = PILImage.open(p_r)
+                                    im_r = PILImage.open(p_f)
                                     st.image(im_r, use_container_width=True)
                                     p_r.seek(0)
                                 except:
@@ -682,81 +681,55 @@ def write_equipment_block(ws, defaults, user_lines, row_idx, copied_pages):
     return row_idx
 
 # ==========================================
-# 💡 핵심: 칸에 꽉 차게 채우는 이미지 앵커 함수
+# 💡 핵심: 셀 안에 사진을 딱 맞추어 넣는 TwoCellAnchor 함수
 # ==========================================
-COL_W_EMU = 914400
-ROW_H_EMU = 247650
-EMU_5MM   = 180000
-
-def get_normalized_marker(start_col, start_row, offset_x_emu, offset_y_emu):
-    c = start_col
-    rem_x = offset_x_emu
-    while rem_x >= COL_W_EMU:
-        rem_x -= COL_W_EMU
-        c += 1
-        
-    r = start_row
-    rem_y = offset_y_emu
-    while rem_y >= ROW_H_EMU:
-        rem_y -= ROW_H_EMU
-        r += 1
-        
-    return AnchorMarker(col=c, colOff=int(rem_x), row=r, rowOff=int(rem_y))
-
-def get_filled_image_bytes(file_obj, target_w_px, target_h_px):
-    file_obj.seek(0)
-    pil_img = PILImage.open(file_obj)
-    orig_w, orig_h = pil_img.size
-    
-    ratio = max(target_w_px / orig_w, target_h_px / orig_h)
-    new_w = int(orig_w * ratio)
-    new_h = int(orig_h * ratio)
-    
-    resized = pil_img.resize((new_w, new_h), PILImage.Resampling.LANCZOS)
-    left = (new_w - target_w_px) // 2
-    top = (new_h - target_h_px) // 2
-    cropped = resized.crop((left, top, left + target_w_px, top + target_h_px))
-    
-    buf = io.BytesIO()
-    cropped.save(buf, format='PNG')
-    buf.seek(0)
-    return buf
-
-def add_scaled_photo_to_slot(ws, photos, base_col, base_row):
+def add_scaled_photo_to_slot(ws, photos, is_left_slot, base_row):
+    """
+    is_left_slot: True면 D~H열(좌측), False면 I~M열(우측)
+    base_row: 시작 행 (0-indexed, 26은 27행)
+    TwoCellAnchor를 사용해 해당 셀 박스 영역 안에 사진을 딱 맞추어 고정
+    """
     if not photos:
         return
         
-    TOTAL_W = 5 * COL_W_EMU
-    TOTAL_H = 10 * ROW_H_EMU
-    usable_h = TOTAL_H - (2 * EMU_5MM)
-    target_h_px = int(usable_h / 9525)
+    start_c = 3 if is_left_slot else 8
+    end_c = 7 if is_left_slot else 12
+    mid_c = 5 if is_left_slot else 10
+    
+    pad_c = 100000     # 좌측 여백
+    end_c_off = 800000 # 우측 여백 (열 끝을 넘지 않음)
+    pad_r = 100000     # 상단 여백
+    end_r_off = 150000 # 하단 여백 (37행 텍스트를 침범하지 않음)
+    end_r = base_row + 9 # 10개 행 (27행부터 36행까지)
     
     if len(photos) == 1:
-        usable_w = TOTAL_W - (2 * EMU_5MM)
-        target_w_px = int(usable_w / 9525)
-        
-        img_buf = get_filled_image_bytes(photos[0], target_w_px, target_h_px)
-        xl = Image(img_buf)
-        
-        marker = get_normalized_marker(base_col, base_row, EMU_5MM, EMU_5MM)
-        xl.anchor = OneCellAnchor(_from=marker, ext=XDRPositiveSize2D(int(usable_w), int(usable_h)))
+        # 단일 사진: 5개 열 범위 전체에 맞추어 배치
+        p = photos[0]
+        p.seek(0)
+        xl = Image(p)
+        from_marker = AnchorMarker(col=start_c, colOff=pad_c, row=base_row, rowOff=pad_r)
+        to_marker = AnchorMarker(col=end_c, colOff=end_c_off, row=end_r, rowOff=end_r_off)
+        xl.anchor = TwoCellAnchor(_from=from_marker, to=to_marker, editAs="twoCell")
         ws.add_image(xl)
         
     elif len(photos) >= 2:
-        half_w = int((TOTAL_W - (3 * EMU_5MM)) / 2)
-        half_w_px = int(half_w / 9525)
-        
-        buf1 = get_filled_image_bytes(photos[0], half_w_px, target_h_px)
-        xl1 = Image(buf1)
-        xl1.anchor = OneCellAnchor(_from=get_normalized_marker(base_col, base_row, EMU_5MM, EMU_5MM), 
-                                   ext=XDRPositiveSize2D(half_w, usable_h))
+        # 2장 사진: 좌/우 절반 영역에 각각 맞추어 배치
+        # 1번 사진 (좌측 절반: start_c ~ mid_c)
+        p1 = photos[0]
+        p1.seek(0)
+        xl1 = Image(p1)
+        from1 = AnchorMarker(col=start_c, colOff=pad_c, row=base_row, rowOff=pad_r)
+        to1 = AnchorMarker(col=mid_c, colOff=400000, row=end_r, rowOff=end_r_off)
+        xl1.anchor = TwoCellAnchor(_from=from1, to=to1, editAs="twoCell")
         ws.add_image(xl1)
         
-        off_x2 = EMU_5MM + half_w + EMU_5MM
-        buf2 = get_filled_image_bytes(photos[1], half_w_px, target_h_px)
-        xl2 = Image(buf2)
-        xl2.anchor = OneCellAnchor(_from=get_normalized_marker(base_col, base_row, off_x2, EMU_5MM), 
-                                   ext=XDRPositiveSize2D(half_w, usable_h))
+        # 2번 사진 (우측 절반: mid_c ~ end_c)
+        p2 = photos[1]
+        p2.seek(0)
+        xl2 = Image(p2)
+        from2 = AnchorMarker(col=mid_c, colOff=500000, row=base_row, rowOff=pad_r)
+        to2 = AnchorMarker(col=end_c, colOff=end_c_off, row=end_r, rowOff=end_r_off)
+        xl2.anchor = TwoCellAnchor(_from=from2, to=to2, editAs="twoCell")
         ws.add_image(xl2)
 
 # ==========================================
@@ -880,7 +853,7 @@ if st.button(btn_label, use_container_width=True):
                     output_report.seek(0)
 
                 # --------------------------------------------------
-                # B. 사진 대장 생성 (template_mxr_공사_블루원.xlsx / template_mxr_사진_블루원.xlsx 기반)
+                # B. 사진 대장 생성 (TwoCellAnchor 적용)
                 # --------------------------------------------------
                 target_photo_template = "template_mxr_공사_블루원.xlsx" if task_type == "공사" else "template_mxr_사진_블루원.xlsx"
                 
@@ -927,13 +900,15 @@ if st.button(btn_label, use_container_width=True):
                                                font=Font(name='돋움체', size=14, bold=True),
                                                alignment=Alignment(horizontal='center', vertical='center', wrap_text=True))
 
-                            add_scaled_photo_to_slot(ws_photo, item["photos_l"], base_col=3, base_row=row_start_idx)
+                            # 💡 좌측 칸 D~H에 물리적 결속
+                            add_scaled_photo_to_slot(ws_photo, item["photos_l"], is_left_slot=True, base_row=row_start_idx)
                             style_merged_range(ws_photo, 4, desc_r, 8, desc_r + 1,
                                                value=clean_desc_text(item["d_left"]),
                                                font=Font(name='돋움체', size=14, bold=True),
                                                alignment=Alignment(horizontal='center', vertical='center', wrap_text=True))
 
-                            add_scaled_photo_to_slot(ws_photo, item["photos_r"], base_col=8, base_row=row_start_idx)
+                            # 💡 우측 칸 I~M에 물리적 결속
+                            add_scaled_photo_to_slot(ws_photo, item["photos_r"], is_left_slot=False, base_row=row_start_idx)
                             style_merged_range(ws_photo, 9, desc_r, 13, desc_r + 1,
                                                value=clean_desc_text(item["d_right"]),
                                                font=Font(name='돋움체', size=14, bold=True),
@@ -974,14 +949,16 @@ if st.button(btn_label, use_container_width=True):
                                                font=Font(name='돋움체', size=14, bold=True),
                                                alignment=Alignment(horizontal='center', vertical='center', wrap_text=True))
 
-                            add_scaled_photo_to_slot(ws_photo, item_left.get("photos", []), base_col=3, base_row=row_start_idx)
+                            # 💡 좌측 칸 D~H에 물리적 결속
+                            add_scaled_photo_to_slot(ws_photo, item_left.get("photos", []), is_left_slot=True, base_row=row_start_idx)
                             style_merged_range(ws_photo, 4, desc_r, 8, desc_r + 1,
                                                value=clean_desc_text(item_left.get("desc", "")),
                                                font=Font(name='돋움체', size=14, bold=True),
                                                alignment=Alignment(horizontal='center', vertical='center', wrap_text=True))
 
+                            # 💡 우측 칸 I~M에 물리적 결속
                             if item_right:
-                                add_scaled_photo_to_slot(ws_photo, item_right.get("photos", []), base_col=8, base_row=row_start_idx)
+                                add_scaled_photo_to_slot(ws_photo, item_right.get("photos", []), is_left_slot=False, base_row=row_start_idx)
                                 style_merged_range(ws_photo, 9, desc_r, 13, desc_r + 1,
                                                    value=clean_desc_text(item_right.get("desc", "")),
                                                    font=Font(name='돋움체', size=14, bold=True),
