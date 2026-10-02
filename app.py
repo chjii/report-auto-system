@@ -197,9 +197,6 @@ saved_draft = load_full_draft()
 main_tab_input, main_tab_preview = st.tabs(["✏️ 데이터 입력", "👁️ 보고서 양식 미리보기"])
 
 with main_tab_input:
-    # ------------------------------------------
-    # 작업 분류 선택
-    # ------------------------------------------
     st.markdown("### 📋 작업 분류 선택")
     saved_task = saved_draft.get("task_type", "점검")
     task_idx = 0 if saved_task == "점검" else 1
@@ -215,9 +212,6 @@ with main_tab_input:
 
     st.divider()
 
-    # ------------------------------------------
-    # 업체 및 현장 선택
-    # ------------------------------------------
     st.markdown("### 🏢 업체 및 현장 선택 (자동 완성)")
 
     vendors_list = sorted(list(set(info.get("vendor", "기타") for info in site_db.values())))
@@ -337,7 +331,7 @@ with main_tab_input:
         st.divider()
         col_m1, col_m2 = st.columns([8, 2])
         with col_m1:
-            st.markdown(f"**점검 상세 내용 (7번부터 자동 넘버링 및 색상 분류 - 자동 영구 저장)**")
+            st.markdown(f"**점검 상세 내용 (2번부터 자동 넘버링 및 색상 분류 - 자동 영구 저장)**")
         with col_m2:
             if st.button("🗑️ 메모 초기화"):
                 st.session_state.contents_area = ""
@@ -481,8 +475,8 @@ with main_tab_input:
                                             except:
                                                 pass
                                 photo_upload_data.append({
-                                    "section": part_name,     # 작업사항 (B열)
-                                    "desc": custom_desc,      # 점검 내용 (D37/I37)
+                                    "section": part_name,
+                                    "desc": custom_desc,
                                     "photos": photos[:2] if photos else []
                                 })
         else:
@@ -604,6 +598,15 @@ def sort_rules(text):
     ho_number = int(match.group(2)) if match else 9999
     return (is_need_replace, ho_number)
 
+def format_inspection_text(text):
+    """
+    1. 소문자 영문 단어 및 약어(c.f 등) 모두 대문자로 변환
+    2. SC/S/C 및 호기 표기를 'S/C #?호기'로 표준화
+    """
+    text = re.sub(r'[a-zA-Z]+(?:\.[a-zA-Z]+)*', lambda m: m.group(0).upper(), text)
+    text = re.sub(r'(?:S/C|SC)\s*#?(\d+)호기', r'S/C #\1호기', text)
+    return text
+
 def ensure_page_exists(ws, target_page, copied_pages):
     if target_page in copied_pages:
         return
@@ -646,17 +649,20 @@ def write_equipment_block(ws, defaults, user_lines, row_idx, copied_pages):
         row_idx = current_page * 38 + 12
 
     lines_to_write = []
+    # 1. 공통 점검사항 (1. 및 1) ~ 6))
     for i, df_text in enumerate(defaults):
         lines_to_write.append((df_text, i == 0, "000000", 'left'))
 
-    start_num = len(defaults)
+    # 2. 사용자가 추가한 개별 점검/조치 내역 (2.부터 시작, 대문자 및 S/C #?호기 적용)
     for idx, text in enumerate(user_lines):
         color, bold = "000000", False
         if "교체 필요" in text:
             color, bold = "FF0000", True
         elif "조치" in text or "교체" in text:
             color, bold = "0000FF", True
-        lines_to_write.append((f" {idx + start_num}) {text}", bold, color, 'left'))
+        
+        formatted_text = format_inspection_text(text)
+        lines_to_write.append((f"{idx + 2}. {formatted_text}", bold, color, 'left'))
 
     for text, is_bold, color, align in lines_to_write:
         current_page = (row_idx - 1) // 38
@@ -720,7 +726,6 @@ def add_scaled_photo_to_slot(ws, photos, base_col, base_row):
         tw = int(w * ratio)
         th = int(h * ratio)
         
-        # 가로/세로 정확한 정중앙 오프셋 계산
         off_x = EMU_5MM + int((usable_w - tw) / 2)
         off_y = EMU_5MM + int((usable_h - th) / 2)
         
@@ -729,13 +734,11 @@ def add_scaled_photo_to_slot(ws, photos, base_col, base_row):
         b.seek(0)
         xl = Image(b)
         
-        # 💡 정규화 마커 적용 (절대 열 폭 초과 안함)
         marker = get_normalized_marker(base_col, base_row, off_x, off_y)
         xl.anchor = OneCellAnchor(_from=marker, ext=XDRPositiveSize2D(tw, th))
         ws.add_image(xl)
         
     elif len(photos) >= 2:
-        # 2장일 때: 슬롯 내부 5:5 좌우 분할 (가운데 5mm 간격)
         half_w = int((TOTAL_W - (3 * EMU_5MM)) / 2)
         
         # 1번 사진 (좌측 절반의 중앙)
@@ -890,28 +893,24 @@ if st.button(btn_label, use_container_width=True):
                             desc_r = layout["desc"]
                             row_start_idx = base_r - 1
 
-                            # NO 번호 & 공사작업 내역 (B:C 병합)
                             get_safe_cell(ws_photo, base_r, 1).value = item["no"]
                             style_merged_range(ws_photo, 2, base_r, 3, layout["end_row"],
                                                value=item["title"],
                                                font=Font(name='돋움체', size=14, bold=True),
                                                alignment=Alignment(horizontal='center', vertical='center', wrap_text=True))
 
-                            # 좌측 사진 (D:H) & 좌측 설명 (D37:H38)
                             add_scaled_photo_to_slot(ws_photo, item["photos_l"], base_col=3, base_row=row_start_idx)
                             style_merged_range(ws_photo, 4, desc_r, 8, desc_r + 1,
                                                value=item["d_left"],
                                                font=Font(name='돋움체', size=14, bold=True),
                                                alignment=Alignment(horizontal='center', vertical='center', wrap_text=True))
 
-                            # 우측 사진 (I:M) & 우측 설명 (I37:M38)
                             add_scaled_photo_to_slot(ws_photo, item["photos_r"], base_col=8, base_row=row_start_idx)
                             style_merged_range(ws_photo, 9, desc_r, 13, desc_r + 1,
                                                value=item["d_right"],
                                                font=Font(name='돋움체', size=14, bold=True),
                                                alignment=Alignment(horizontal='center', vertical='center', wrap_text=True))
 
-                        # 미사용 하단 템플릿 행 삭제
                         last_keep_row = ITEM_LAYOUTS[min(num_items - 1, len(ITEM_LAYOUTS) - 1)]["end_row"]
                         ranges_to_remove = [mr for mr in list(ws_photo.merged_cells.ranges) if mr.min_row > last_keep_row]
                         for mr in ranges_to_remove:
@@ -927,7 +926,6 @@ if st.button(btn_label, use_container_width=True):
                             ws_photo.delete_rows(last_keep_row + 1, ws_photo.max_row - last_keep_row)
 
                     else:
-                        # 점검 모드 사진대장: 2개씩 짝지어 좌측 슬롯(D:H) / 우측 슬롯(I:M) 순차 배치
                         valid_items = [x for x in photo_upload_data if (x.get("photos") and len(x["photos"]) > 0) or (x.get("desc") and x["desc"].strip())]
                         num_pairs = (len(valid_items) + 1) // 2
 
@@ -941,23 +939,19 @@ if st.button(btn_label, use_container_width=True):
                             item_left = valid_items[pair_idx * 2]
                             item_right = valid_items[pair_idx * 2 + 1] if (pair_idx * 2 + 1) < len(valid_items) else None
 
-                            # 1) NO 번호
                             get_safe_cell(ws_photo, base_r, 1).value = pair_idx + 1
                             
-                            # 2) 작업사항(B:C열 병합) -> 설비 구간명 (예: S/C CARRIAGE부 점검)
                             style_merged_range(ws_photo, 2, base_r, 3, layout["end_row"],
                                                value=item_left["section"],
                                                font=Font(name='돋움체', size=14, bold=True),
                                                alignment=Alignment(horizontal='center', vertical='center', wrap_text=True))
 
-                            # 3) 좌측 슬롯 (D27:H36 사진 + D37:H38 설명)
                             add_scaled_photo_to_slot(ws_photo, item_left.get("photos", []), base_col=3, base_row=row_start_idx)
                             style_merged_range(ws_photo, 4, desc_r, 8, desc_r + 1,
                                                value=item_left.get("desc", ""),
                                                font=Font(name='돋움체', size=14, bold=True),
                                                alignment=Alignment(horizontal='center', vertical='center', wrap_text=True))
 
-                            # 4) 우측 슬롯 (I27:M36 사진 + I37:M38 설명)
                             if item_right:
                                 add_scaled_photo_to_slot(ws_photo, item_right.get("photos", []), base_col=8, base_row=row_start_idx)
                                 style_merged_range(ws_photo, 9, desc_r, 13, desc_r + 1,
@@ -1030,7 +1024,7 @@ if st.session_state.get("has_generated"):
         with c2:
             if st.session_state.get("gen_photo_bytes"):
                 st.download_button(
-                    label="🖼️️ [MXR_점검사진대장] 다운로드",
+                    label="🖼️ [MXR_점검사진대장] 다운로드",
                     data=st.session_state["gen_photo_bytes"],
                     file_name=st.session_state["gen_photo_name"],
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
