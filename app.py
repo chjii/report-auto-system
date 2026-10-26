@@ -417,9 +417,9 @@ with main_tab_input:
                         for p_i, p_f in enumerate(photos_r[:2]):
                             with sub_cols_r[p_i]:
                                 try:
-                                    im_r = PILImage.open(p_r)
+                                    im_r = PILImage.open(p_f)
                                     st.image(im_r, use_container_width=True)
-                                    p_r.seek(0)
+                                    p_f.seek(0)
                                 except:
                                     pass
                     d_right = st.text_input(f"우측 사진 설명", placeholder="예: 작업 완료 후 상태", key=f"c_desc_r_{c_idx}")
@@ -452,7 +452,7 @@ with main_tab_input:
                     active_tabs_dict[sub_part] = items
 
         if active_tabs_dict:
-            st.info(f"💡 선택된 설비({', '.join(equipments)})의 구간별 점검 항목입니다. 작업사항(B열)에는 해당 구간 점검명이, 사진 밑(D37/I37)에는 14pt 돋움체 점검 내용이 매핑됩니다.")
+            st.info(f"💡 선택된 설비({', '.join(equipments)})의 구간별 점검 항목입니다. 사진을 등록한 항목만 사진대장에 자동 배치됩니다.")
             tab_names = list(active_tabs_dict.keys())
             tabs = st.tabs(tab_names)
 
@@ -465,7 +465,7 @@ with main_tab_input:
                         with target_col:
                             with st.container(border=True):
                                 custom_desc = st.text_input(
-                                    f"점검 내용 #{item_idx+1}", 
+                                    f"점검 내용 #{item_idx+1} ({'좌측 칸' if item_idx % 2 == 0 else '우측 칸'})", 
                                     value=def_val, 
                                     key=f"sc_desc_{t_idx}_{item_idx}", 
                                     placeholder="상세 점검 내용 직접 입력"
@@ -495,12 +495,34 @@ with main_tab_input:
             st.caption("선택된 설비가 없습니다. 상단에서 설비를 선택해주세요.")
 
 # ==========================================
-# 2. 👁️ 보고서 양식 미리보기 탭
+# 2. 👁️ 보고서 양식 미리보기 탭 & 그룹화 함수
 # ==========================================
 def clean_desc_text(text):
     if not text:
         return ""
     return re.sub(r'^\s*\(?\d+\)?[\.\)\-\s]*', '', text).strip()
+
+def build_inspection_pairs(upload_list):
+    """
+    점검 모드에서 실제로 사진이 업로드된 항목(또는 4번 슬롯에 직접 입력한 항목)만 추출하여
+    같은 부위(section)끼리 좌/우 2개씩 묶어 행(pair) 리스트를 생성
+    """
+    by_section = {}
+    for x in upload_list:
+        has_photo = bool(x.get("photos") and len(x["photos"]) > 0)
+        if has_photo:
+            sec = x["section"]
+            if sec not in by_section:
+                by_section[sec] = []
+            by_section[sec].append(x)
+
+    pairs = []
+    for sec, items in by_section.items():
+        for i in range(0, len(items), 2):
+            left_item = items[i]
+            right_item = items[i + 1] if (i + 1) < len(items) else None
+            pairs.append((sec, left_item, right_item))
+    return pairs
 
 with main_tab_preview:
     st.markdown(f"### 📋 {site_name} 자동화 창고 {task_type} 보고서 양식 미리보기")
@@ -540,21 +562,17 @@ with main_tab_preview:
                                 st.image(PILImage.open(p_file), use_container_width=True)
                     st.info(f"**설명:** {clean_desc_text(item['d_right']) if item['d_right'] else '(설명 없음)'}")
     else:
-        valid_items_pv = [x for x in photo_upload_data if (x.get("photos") and len(x["photos"]) > 0) or (x.get("desc") and x["desc"].strip())]
-        if not valid_items_pv:
-            st.caption("등록된 점검 사진 및 내용이 없습니다. '데이터 입력' 탭에서 입력해주세요.")
+        preview_pairs = build_inspection_pairs(photo_upload_data)
+        if not preview_pairs:
+            st.caption("등록된 점검 사진이 없습니다. '데이터 입력' 탭에서 사진을 업로드해주세요.")
         else:
-            for pair_idx in range(0, len(valid_items_pv), 2):
-                no_num = (pair_idx // 2) + 1
-                item_left = valid_items_pv[pair_idx]
-                item_right = valid_items_pv[pair_idx + 1] if pair_idx + 1 < len(valid_items_pv) else None
-                sec_name = item_left["section"]
-
+            for pair_idx, (sec_name, item_left, item_right) in enumerate(preview_pairs):
+                no_num = pair_idx + 1
                 with st.container(border=True):
                     st.markdown(f"**NO. {no_num} | 작업사항: {sec_name}**")
                     pv_c1, pv_c2 = st.columns(2)
                     with pv_c1:
-                        st.caption("📷 [좌측 칸 - D27:H36]")
+                        st.caption("📷 [좌측 칸 - D~H열]")
                         if item_left["photos"]:
                             sub_pvc = st.columns(len(item_left["photos"]))
                             for p_idx, p_file in enumerate(item_left["photos"]):
@@ -563,7 +581,7 @@ with main_tab_preview:
                                     st.image(PILImage.open(p_file), use_container_width=True)
                         st.info(f"**점검 내용:** {clean_desc_text(item_left['desc']) if item_left['desc'] else '(내용 없음)'}")
                     with pv_c2:
-                        st.caption("📷 [우측 칸 - I27:M36]")
+                        st.caption("📷 [우측 칸 - I~M열]")
                         if item_right:
                             if item_right["photos"]:
                                 sub_pvc = st.columns(len(item_right["photos"]))
@@ -693,7 +711,7 @@ def write_equipment_block(ws, defaults, user_lines, row_idx, copied_pages):
     return row_idx
 
 # ==========================================
-# 💡 핵심: 스마트폰 사진을 표준 PNG로 변환하고 포맷을 'png'로 고정
+# 💡 핵심: 실제 열 너비(baseColWidth=8, 609,600 EMU) 기준 정확한 셀 내부 고정
 # ==========================================
 def load_clean_image(file_obj):
     file_obj.seek(0)
@@ -709,20 +727,22 @@ def load_clean_image(file_obj):
 
 def add_scaled_photo_to_slot(ws, photos, is_left_slot, base_row):
     """
-    TwoCellAnchor를 사용해 지정된 셀 박스 안에 사진을 가두어 배치
+    템플릿의 실제 열 폭(baseColWidth=8 -> 약 609,600 EMU)과
+    행 높이(19.5pt -> 247,650 EMU) 안쪽에 정확히 들어오도록 TwoCellAnchor 좌표 설정
     """
     if not photos:
         return
         
-    start_c = 3 if is_left_slot else 8
-    end_c = 7 if is_left_slot else 12
-    mid_c = 5 if is_left_slot else 10
+    start_c = 3 if is_left_slot else 8   # 좌측: D열(3), 우측: I열(8)
+    end_c = 7 if is_left_slot else 12    # 좌측: H열(7), 우측: M열(12)
+    mid_c = 5 if is_left_slot else 10    # 좌측 중간: F열(5), 우측 중간: K열(10)
     
-    pad_c = 100000     # 좌측 내부 여백
-    end_c_off = 800000 # 우측 내부 여백 (열 끝을 넘지 않음)
-    pad_r = 100000     # 상단 내부 여백
-    end_r_off = 150000 # 하단 내부 여백 (37행 텍스트 침범 방지)
-    end_r = base_row + 9 # 10개 행 (27행부터 36행까지)
+    # baseColWidth=8 기준 1개 열 폭 = 609,600 EMU / 1개 행 높이(19.5pt) = 247,650 EMU
+    pad_c = 50000      # 시작 열 좌측 선에서 약 5px 안쪽
+    end_c_off = 520000 # 종료 열(H/M) 우측 선(609,600)에서 약 9px 안쪽 (절대 열을 넘지 않음)
+    pad_r = 50000      # 27행 상단 선에서 약 4pt 아래쪽
+    end_r_off = 180000 # 36행 하단 선(247,650)에서 약 5pt 위쪽 (37행 글자 칸 침범 원천 차단)
+    end_r = base_row + 9 # 총 10개 행 (예: 27행~36행 -> 0-indexed 26~35)
     
     if len(photos) == 1:
         xl = load_clean_image(photos[0])
@@ -732,16 +752,16 @@ def add_scaled_photo_to_slot(ws, photos, is_left_slot, base_row):
         ws.add_image(xl)
         
     elif len(photos) >= 2:
-        # 1번 사진 (좌측 절반)
+        # 1번 사진 (좌측 절반: start_c ~ mid_c 중앙 좌측)
         xl1 = load_clean_image(photos[0])
         from1 = AnchorMarker(col=start_c, colOff=pad_c, row=base_row, rowOff=pad_r)
-        to1 = AnchorMarker(col=mid_c, colOff=400000, row=end_r, rowOff=end_r_off)
+        to1 = AnchorMarker(col=mid_c, colOff=260000, row=end_r, rowOff=end_r_off)
         xl1.anchor = TwoCellAnchor(_from=from1, to=to1, editAs="twoCell")
         ws.add_image(xl1)
         
-        # 2번 사진 (우측 절반)
+        # 2번 사진 (우측 절반: mid_c 중앙 우측 ~ end_c)
         xl2 = load_clean_image(photos[1])
-        from2 = AnchorMarker(col=mid_c, colOff=500000, row=base_row, rowOff=pad_r)
+        from2 = AnchorMarker(col=mid_c, colOff=340000, row=base_row, rowOff=pad_r)
         to2 = AnchorMarker(col=end_c, colOff=end_c_off, row=end_r, rowOff=end_r_off)
         xl2.anchor = TwoCellAnchor(_from=from2, to=to2, editAs="twoCell")
         ws.add_image(xl2)
@@ -867,7 +887,7 @@ if st.button(btn_label, use_container_width=True):
                     output_report.seek(0)
 
                 # --------------------------------------------------
-                # B. 사진 대장 생성 (TwoCellAnchor 적용)
+                # B. 사진 대장 생성 (실제 열 폭 맞춤 TwoCellAnchor 적용)
                 # --------------------------------------------------
                 target_photo_template = "template_mxr_공사_블루원.xlsx" if task_type == "공사" else "template_mxr_사진_블루원.xlsx"
                 
@@ -914,21 +934,19 @@ if st.button(btn_label, use_container_width=True):
                                                font=Font(name='돋움체', size=14, bold=True),
                                                alignment=Alignment(horizontal='center', vertical='center', wrap_text=True))
 
-                            # 💡 좌측 칸 D~H에 물리적 결속
                             add_scaled_photo_to_slot(ws_photo, item["photos_l"], is_left_slot=True, base_row=row_start_idx)
                             style_merged_range(ws_photo, 4, desc_r, 8, desc_r + 1,
                                                value=clean_desc_text(item["d_left"]),
                                                font=Font(name='돋움체', size=14, bold=True),
                                                alignment=Alignment(horizontal='center', vertical='center', wrap_text=True))
 
-                            # 💡 우측 칸 I~M에 물리적 결속
                             add_scaled_photo_to_slot(ws_photo, item["photos_r"], is_left_slot=False, base_row=row_start_idx)
                             style_merged_range(ws_photo, 9, desc_r, 13, desc_r + 1,
                                                value=clean_desc_text(item["d_right"]),
                                                font=Font(name='돋움체', size=14, bold=True),
                                                alignment=Alignment(horizontal='center', vertical='center', wrap_text=True))
 
-                        last_keep_row = ITEM_LAYOUTS[min(num_items - 1, len(ITEM_LAYOUTS) - 1)]["end_row"]
+                        last_keep_row = ITEM_LAYOUTS[min(max(num_items, 1) - 1, len(ITEM_LAYOUTS) - 1)]["end_row"]
                         ranges_to_remove = [mr for mr in list(ws_photo.merged_cells.ranges) if mr.min_row > last_keep_row]
                         for mr in ranges_to_remove:
                             ws_photo.merged_cells.ranges.remove(mr)
@@ -941,36 +959,35 @@ if st.button(btn_label, use_container_width=True):
                                     cell.fill = PatternFill(fill_type=None)
                         if ws_photo.max_row > last_keep_row:
                             ws_photo.delete_rows(last_keep_row + 1, ws_photo.max_row - last_keep_row)
+                        ws_photo.print_area = f"A1:M{last_keep_row}"
 
                     else:
-                        valid_items = [x for x in photo_upload_data if (x.get("photos") and len(x["photos"]) > 0) or (x.get("desc") and x["desc"].strip())]
-                        num_pairs = (len(valid_items) + 1) // 2
+                        # 💡 실제 사진이 업로드된 항목만 같은 부위별로 좌/우 짝지어 배치
+                        pairs = build_inspection_pairs(photo_upload_data)
+                        num_pairs = len(pairs)
 
-                        for pair_idx in range(num_pairs):
+                        for pair_idx, (sec_name, item_left, item_right) in enumerate(pairs):
                             if pair_idx >= len(ITEM_LAYOUTS): break
                             layout = ITEM_LAYOUTS[pair_idx]
                             base_r = layout["base"]
                             desc_r = layout["desc"]
                             row_start_idx = base_r - 1
 
-                            item_left = valid_items[pair_idx * 2]
-                            item_right = valid_items[pair_idx * 2 + 1] if (pair_idx * 2 + 1) < len(valid_items) else None
-
                             get_safe_cell(ws_photo, base_r, 1).value = pair_idx + 1
                             
                             style_merged_range(ws_photo, 2, base_r, 3, layout["end_row"],
-                                               value=item_left["section"],
+                                               value=sec_name,
                                                font=Font(name='돋움체', size=14, bold=True),
                                                alignment=Alignment(horizontal='center', vertical='center', wrap_text=True))
 
-                            # 💡 좌측 칸 D~H에 물리적 결속
+                            # 좌측 칸 D~H에 결속
                             add_scaled_photo_to_slot(ws_photo, item_left.get("photos", []), is_left_slot=True, base_row=row_start_idx)
                             style_merged_range(ws_photo, 4, desc_r, 8, desc_r + 1,
                                                value=clean_desc_text(item_left.get("desc", "")),
                                                font=Font(name='돋움체', size=14, bold=True),
                                                alignment=Alignment(horizontal='center', vertical='center', wrap_text=True))
 
-                            # 💡 우측 칸 I~M에 물리적 결속
+                            # 우측 칸 I~M에 결속
                             if item_right:
                                 add_scaled_photo_to_slot(ws_photo, item_right.get("photos", []), is_left_slot=False, base_row=row_start_idx)
                                 style_merged_range(ws_photo, 9, desc_r, 13, desc_r + 1,
@@ -997,6 +1014,7 @@ if st.button(btn_label, use_container_width=True):
                                         cell.fill = PatternFill(fill_type=None)
                             if ws_photo.max_row > last_keep_row:
                                 ws_photo.delete_rows(last_keep_row + 1, ws_photo.max_row - last_keep_row)
+                            ws_photo.print_area = f"A1:M{last_keep_row}"
 
                     output_photo = io.BytesIO()
                     wb_photo.save(output_photo)
